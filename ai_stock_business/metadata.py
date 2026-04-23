@@ -2,6 +2,64 @@ import os, json
 from groq import Groq
 from datetime import datetime
 
+# DREAMSTIME IDs
+VALID_CATEGORIES = {
+    # ABSTRACT & BACKGROUNDS (Highly Profitable, Very Safe)
+    112: "Abstract -> Backgrounds",
+    39:  "Abstract -> Blurs",
+    164: "Abstract -> Colors",
+    40:  "Abstract -> Competition",
+    42:  "Abstract -> Danger",
+    43:  "Abstract -> Exploration",
+    45:  "Abstract -> Luxury",
+    187: "Abstract -> Mobile",
+    47:  "Abstract -> Power",
+    48:  "Abstract -> Purity",
+    49:  "Abstract -> Security",
+    51:  "Abstract -> Stress",
+    52:  "Abstract -> Success",
+    53:  "Abstract -> Teamwork",
+    141: "Abstract -> Textures",
+    54:  "Abstract -> Unique",
+
+    # BUSINESS & FINANCE (Corporate Concepts)
+    79:  "Business -> Communications",
+    78:  "Business -> Computers",
+    80:  "Business -> Finance",
+    77:  "Business -> Industries",
+    83:  "Business -> Metaphors",
+    84:  "Business -> Objects",
+    76:  "Business -> Teams", # Used for abstract representations of teamwork (e.g. glowing nodes connecting)
+
+    # IT & C (Information Technology & Data - Your Bread and Butter)
+    210: "IT & C -> Artificial Intelligence",
+    110: "IT & C -> Connectivity",
+    113: "IT & C -> Equipment",
+    111: "IT & C -> Internet",
+    109: "IT & C -> Networking",
+
+    # TECHNOLOGY (Hardware, Science, General Tech)
+    105: "Technology -> Computers",
+    106: "Technology -> Connections",
+    129: "Technology -> Electronics",
+    209: "Technology -> Science",
+    104: "Technology -> Telecommunications",
+
+    # DIGITAL INDUSTRIES (Macro concepts)
+    89:  "Industries -> Architecture",
+    87:  "Industries -> Banking",
+    94:  "Industries -> Communications",
+    91:  "Industries -> Computers",
+    90:  "Industries -> Construction",
+    99:  "Industries -> Environment", # Safe for abstract clean-energy concepts
+    92:  "Industries -> Healthcare & Medical", # Safe for abstract medical data
+    100: "Industries -> Manufacturing",
+    97:  "Industries -> Power and energy",
+
+    # WEB DESIGN ELEMENTS
+    199: "Web Design Graphics -> Web Backgrounds & Textures"
+}
+
 def get_trending_keywords():
     client = Groq(api_key=os.getenv("GROQ_API_KEY"))
     current_month = datetime.now().strftime("%B")
@@ -36,9 +94,9 @@ def score_metadata_revenue_potential(title, keywords, category_id):
     longtail_count = sum(1 for kw in keywords if len(kw.split()) >= 2)
     score += min(15, longtail_count)
     
-    # Revenue optimization
-    if category_id in [19, 43, 26]: score += 20
-    elif category_id == 11: score += 15
+    # Updated Revenue Optimization based on REAL IDs
+    if category_id in [210, 110, 106, 78]: score += 20 # High-value Tech/IT
+    elif category_id in [112, 199, 141]: score += 15   # Backgrounds/Textures
     else: score += 10
     
     return min(100, score)
@@ -46,25 +104,19 @@ def score_metadata_revenue_potential(title, keywords, category_id):
 def get_image_metadata(dynamic_prompt, global_keywords):
     client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-    # Updated Prompt: Extreme category constraints and de-advertised description mandate
+    # Convert the python dictionary to a formatted string for the prompt
+    category_list_str = "\n".join([f"{k}: {v}" for k, v in VALID_CATEGORIES.items()])
+
     prompt = f"""
     You are a stock photography SEO expert. Create metadata for an image generated with this exact visual prompt:
     "{dynamic_prompt}"
 
     DREAMSTIME COMMERCIAL CATEGORIES (Strict Selection):
     allowed_categories = {{
-        11: "Abstract (Backgrounds, Concepts, Blurs)",
-        19: "Business (Corporate, Finance, Teamwork)",
-        20: "Concepts (Metaphors, Ideas)",
-        24: "Industry (Manufacturing, Construction)",
-        26: "IT & C (Information Technology, AI, Data Visualization)",
-        42: "Science (Research, Medical)",
-        43: "Design / Architecture",
-        50: "Textures & Backgrounds"
+{category_list_str}
     }}
     
-    **FORBIDDEN MAIN CATEGORIES** (Do NOT Select These or Any of Their Subcategories):
-    Re-read this constraint. You are FORBIDDEN from selecting any category under Nature (31), Seasons Specific (36), Water (39), or People (41). Doing so will result in a zero revenue score. Your entire output will be discarded and replaced with a default. The ONLY allowed categories are from the list below. Re-read this constraint.
+    CRITICAL INSTRUCTION: You MUST select the category IDs (integers) ONLY from the allowed_categories list above. 
 
     Return ONLY a JSON object with:
     1. "title": Commercial title (60-80 chars, NO commas). Make it highly descriptive. Combine the core concept with practical use-case nouns (e.g., "Abstract Neural Nexus Hub Data Visualization Background"). DO NOT default to AI terms (e.g., "AI-Powered").
@@ -83,13 +135,13 @@ def get_image_metadata(dynamic_prompt, global_keywords):
         data = json.loads(completion.choices[0].message.content)
     except Exception as e:
         print(f"Metadata generation failed: {e}")
-        # Robust default: abstract tech background, relevant categories
+        # Robust default: 112 is Abstract Backgrounds, 210 is IT & C AI
         data = {
             "title": "Modern Abstract Corporate Technology Background", 
             "description": "Premium modern abstract technology background. Perfect for corporate presentations, digital marketing, and data visualization concepts. (AI Generated)",
             "keywords": ["abstract", "modern", "background", "technology", "data"], 
-            "category_id": 11, # Abstract
-            "category_id_2": 26 # IT&C
+            "category_id": 112, 
+            "category_id_2": 210
         }
 
     # Post-processing keywords
@@ -113,15 +165,17 @@ def get_image_metadata(dynamic_prompt, global_keywords):
             break
     
     data['keywords'] = optimize_keyword_density(final_keywords)
-    
-    # Secure title commas
     data['title'] = data.get('title', 'Modern Abstract Tech Design')[:80].replace(',', '')
     
-    # Post-processing to enforce " (AI Generated)"
     desc = data.get('description', 'Premium abstract commercial stock photography background. (AI Generated)')
-    # Secure it at the description level
     data['description'] = (desc[:1485] + " (AI Generated)").replace(" (AI Generated) (AI Generated)", " (AI Generated)")
     
-    data['revenue_score'] = score_metadata_revenue_potential(data['title'], data['keywords'], data.get('category_id', 11))
+    # Enforce safe category defaults if the AI still hallucinated a bad number
+    if data.get('category_id') not in VALID_CATEGORIES:
+        data['category_id'] = 112 # Abstract Backgrounds
+    if data.get('category_id_2') not in VALID_CATEGORIES:
+        data['category_id_2'] = 210 # AI / Tech
+        
+    data['revenue_score'] = score_metadata_revenue_potential(data['title'], data['keywords'], data['category_id'])
     
     return data

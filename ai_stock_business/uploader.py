@@ -31,7 +31,6 @@ def batch_upload_to_dreamstime(results_list, retry_count=1):
             
             csv_filename = f"batch_{int(time.time())}.csv"
             output = io.StringIO()
-            # Quote all ensures that if the LLM puts a comma in the description, it doesn't break the CSV columns
             writer = csv.writer(output, delimiter=',', quotechar='"', quoting=csv.QUOTE_ALL)
             
             revenue_scores = []
@@ -39,16 +38,14 @@ def batch_upload_to_dreamstime(results_list, retry_count=1):
             for idx, item in enumerate(results_list):
                 remote_name = os.path.basename(item['path'])
                 
-                # Pull the AI-generated title and description
                 title = item['meta'].get('title', 'Abstract Background')[:80]
                 description = item['meta'].get('description', 'Premium abstract commercial stock photography background. (AI Generated)')
-                # FAIL-SAFE: Re-enforcing "(AI Generated)" in the description at the CSV stage
                 description = (description[:1485] + " (AI Generated)").replace(" (AI Generated) (AI Generated)", " (AI Generated)")[:1500]
                 
-                # These integer IDs are persistent problems with mapping on Dreamstime's side.
-                # metadata.py is now hardened to only select high-demand, non-Nature categories.
-                category1 = item['meta'].get('category_id', 11)
-                category2 = item['meta'].get('category_id_2', 19)
+                # REPLACED: Changed the old bad fallback IDs (11, 19) to the REAL IDs (112, 210)
+                # 112 = Abstract -> Backgrounds | 210 = IT & C -> Artificial Intelligence
+                category1 = item['meta'].get('category_id', 112)
+                category2 = item['meta'].get('category_id_2', 210)
                 revenue_scores.append(item['meta'].get('revenue_score', 50))
                 
                 writer.writerow([
