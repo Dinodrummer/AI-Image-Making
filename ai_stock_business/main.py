@@ -8,6 +8,26 @@ import generator, metadata, uploader
 
 load_dotenv()
 
+# --- NEW: LONG-TERM REVENUE SETTINGS ---
+LEDGER_FILE = "concept_ledger.json"
+MAX_IMAGES_PER_CONCEPT = 15 # The cannibalization limit
+
+def load_ledger():
+    if os.path.exists(LEDGER_FILE):
+        try:
+            with open(LEDGER_FILE, "r") as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
+
+def update_ledger(concept):
+    ledger = load_ledger()
+    ledger[concept] = ledger.get(concept, 0) + 1
+    with open(LEDGER_FILE, "w") as f:
+        json.dump(ledger, f, indent=4)
+# ----------------------------------------
+
 def get_current_pst_date():
     pst = pytz.timezone('US/Pacific')
     return datetime.now(pst).strftime("%B %d, %Y")
@@ -80,6 +100,11 @@ def get_master_strategy(live_market_context, target_count):
     current_month = get_current_month()
     day_info = get_day_of_week_impact()
     
+    # --- NEW: Ledger Extraction for Saturated Concepts ---
+    ledger = load_ledger()
+    saturated_concepts = [k for k, v in ledger.items() if v >= MAX_IMAGES_PER_CONCEPT]
+    saturated_text = ", ".join(saturated_concepts) if saturated_concepts else "None yet."
+    
     historical_context = "No historical sales data available yet."
     if os.path.exists("market_memory.json"):
         try:
@@ -92,6 +117,7 @@ def get_master_strategy(live_market_context, target_count):
 
     print(f"Generating Master Strategy from live data and historical memory...")
 
+    # 70/30 Split and Saturated Concept Ban
     prompt = f"""
     You are a stock photography strategist. You must synthesize LIVE market data with the user's HISTORICAL sales data to maximize profit.
     
@@ -101,23 +127,28 @@ def get_master_strategy(live_market_context, target_count):
     HISTORICAL PERFORMANCE MEMORY:
     {historical_context}
     
+    SATURATED CONCEPTS (DO NOT USE THESE):
+    {saturated_text}
+    
     Today is a {day_info['name']}. Buyers are looking for {day_info['buyer_type']} content.
     
     Return ONLY a valid JSON object. Do not include markdown formatting or conversational text.
     Structure the JSON exactly like this:
     {{
         "niches": [
-            {{"name": "niche keyword phrase", "viability_score": 85, "exclusive_percent": 60}},
-            {{"name": "another specific niche", "viability_score": 92, "exclusive_percent": 80}}
+            {{"name": "niche keyword phrase", "viability_score": 85, "exclusive_percent": 60, "type": "evergreen"}},
+            {{"name": "another specific niche", "viability_score": 92, "exclusive_percent": 80, "type": "trending"}}
         ]
     }}
     
     Rules:
     1. Provide exactly {max(3, target_count * 2)} niches.
-    2. Heavily weight the 'viability_score' toward concepts proven in the HISTORICAL PERFORMANCE MEMORY.
-    3. Niches MUST be abstract, business, tech, or design focused. NO faces or humans.
-    4. viability_score is 0-100 based on profit potential minus saturation.
-    5. exclusive_percent is 20-100 based on how unique the niche is.
+    2. CRITICAL PORTFOLIO SPLIT: Make roughly 70% of the niches "evergreen" (timeless business/tech concepts like cybersecurity, teamwork, cloud data that always sell) and 30% "trending" (based on the live market context).
+    3. NEVER suggest a niche from the SATURATED CONCEPTS list.
+    4. Heavily weight the 'viability_score' toward concepts proven in the HISTORICAL PERFORMANCE MEMORY.
+    5. Niches MUST be abstract, business, tech, or design focused. NO faces or humans.
+    6. viability_score is 0-100 based on profit potential minus saturation.
+    7. exclusive_percent is 20-100 based on how unique the niche is.
     """
 
     try:
@@ -130,7 +161,10 @@ def get_master_strategy(live_market_context, target_count):
     except Exception as e:
         print(f"Master strategy generation failed: {e}. Using safe defaults.")
         return {
-            "niches": [{"name": f"modern {current_month} corporate abstract", "viability_score": 75, "exclusive_percent": 50}]
+            "niches": [
+                {"name": f"modern corporate tech abstract", "viability_score": 85, "exclusive_percent": 50, "type": "evergreen"},
+                {"name": f"{current_month} business trends background", "viability_score": 75, "exclusive_percent": 50, "type": "trending"}
+            ]
         }
 
 def main():
@@ -139,6 +173,9 @@ def main():
     except: target_count = 1
 
     if not os.path.exists('temp_images'): os.makedirs('temp_images')
+    # Create the local folder for Adobe Stock exports
+    if not os.path.exists('Adobe_Stock_Batches'): os.makedirs('Adobe_Stock_Batches')
+    
     print(f"--- LAUNCHING OPTIMIZED PRODUCTION: {target_count} ASSETS ---")
     
     timing_intel = get_optimal_upload_timing()
@@ -159,10 +196,11 @@ def main():
         if len(batch_results) >= target_count: break
         
         base_niche = niche_data.get('name', 'abstract corporate')
+        niche_type = niche_data.get('type', 'evergreen')
         viability = niche_data.get('viability_score', 50)
         exclusive_threshold = niche_data.get('exclusive_percent', 40) / 100.0
         
-        print(f"Processing ({len(batch_results)+1}/{target_count}): {base_niche} [viability={viability}]")
+        print(f"Processing ({len(batch_results)+1}/{target_count}): [{niche_type.upper()}] {base_niche} [viability={viability}]")
         
         max_retries = 2
         for attempt in range(max_retries):
@@ -175,7 +213,6 @@ def main():
                 )
                 ratio_counter += 1
                 
-                # Category demand removed; metadata handles it dynamically now
                 meta = metadata.get_image_metadata(dynamic_prompt, global_keywords)
                 
                 batch_results.append({
@@ -185,6 +222,9 @@ def main():
                     'niche': base_niche,
                     'timestamp': time.time()
                 })
+                
+                # --- NEW: Log the success to the ledger ---
+                update_ledger(base_niche)
                 
                 time.sleep(12) 
                 break
@@ -203,9 +243,10 @@ def main():
                     failed_uploads.append({'keyword': base_niche, 'error': str(e)})
 
     if batch_results:
+        # Note: Your new uploader.py handles BOTH the Adobe Stock local export and the Dreamstime FTP
         upload_success = uploader.batch_upload_to_dreamstime(batch_results)
         if upload_success:
-            print(f"--- SUCCESS: {len(batch_results)} assets uploaded ---")
+            print(f"--- SUCCESS: {len(batch_results)} assets processed ---")
         else:
             print(f"--- WARNING: Upload failed, retrying ---")
             time.sleep(5)

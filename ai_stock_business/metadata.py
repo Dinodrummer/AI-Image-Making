@@ -63,7 +63,7 @@ VALID_CATEGORIES = {
 def get_trending_keywords():
     client = Groq(api_key=os.getenv("GROQ_API_KEY"))
     current_month = datetime.now().strftime("%B")
-    prompt = (f"What are the TOP 15 HIGHEST-PROFIT keywords buyers are searching for on Dreamstime in {current_month}?\n"
+    prompt = (f"What are the TOP 30 HIGHEST-PROFIT keywords buyers are searching for on Dreamstime in {current_month}?\n"
               f"Return ONLY a comma-separated list. Focus on: business, luxury, abstract. No humans. DO NOT suggest AI-related buzzwords unless they are extremely high volume.")
     try:
         completion = client.chat.completions.create(
@@ -76,9 +76,32 @@ def get_trending_keywords():
 
 def optimize_keyword_density(keywords):
     premium_terms = ['luxury', 'premium', 'business', 'corporate', 'design', 'modern', 'professional', 'abstract']
-    premium_kws = [kw for kw in keywords if any(term in kw.lower() for term in premium_terms)]
-    regular_kws = [kw for kw in keywords if kw not in premium_kws]
-    optimized = premium_kws[:int(len(keywords) * 0.6)] + regular_kws[:int(len(keywords) * 0.4)]
+    
+    # Force everything to lowercase and clean up the AI's mess
+    cleaned_kws = set()
+    for kw in keywords:
+        if not isinstance(kw, str): continue
+        
+        # Split if the LLM sent a comma-separated string inside a list item
+        for sub_kw in kw.split(','):
+            k = sub_kw.strip().lower()
+            
+            # Break apart massive sentences. If a keyword has > 3 words, split it into single words.
+            words = k.split()
+            if len(words) > 3:
+                for w in words:
+                    cleaned_kws.add(w)
+            elif len(words) > 0:
+                cleaned_kws.add(k)
+                
+    cleaned_list = list(cleaned_kws)
+    
+    # Sort by premium terms to prioritize high-value tags
+    premium_kws = [kw for kw in cleaned_list if any(term in kw for term in premium_terms)]
+    regular_kws = [kw for kw in cleaned_list if kw not in premium_kws]
+    
+    optimized = premium_kws[:int(len(cleaned_list) * 0.6)] + regular_kws[:int(len(cleaned_list) * 0.4)]
+    
     return optimized[:50] 
 
 def score_metadata_revenue_potential(title, keywords, category_id):
@@ -94,9 +117,8 @@ def score_metadata_revenue_potential(title, keywords, category_id):
     longtail_count = sum(1 for kw in keywords if len(kw.split()) >= 2)
     score += min(15, longtail_count)
     
-    # Updated Revenue Optimization based on REAL IDs
-    if category_id in [210, 110, 106, 78]: score += 20 # High-value Tech/IT
-    elif category_id in [112, 199, 141]: score += 15   # Backgrounds/Textures
+    if category_id in [210, 110, 106, 78]: score += 20 
+    elif category_id in [112, 199, 141]: score += 15   
     else: score += 10
     
     return min(100, score)
@@ -104,7 +126,6 @@ def score_metadata_revenue_potential(title, keywords, category_id):
 def get_image_metadata(dynamic_prompt, global_keywords):
     client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-    # Convert the python dictionary to a formatted string for the prompt
     category_list_str = "\n".join([f"{k}: {v}" for k, v in VALID_CATEGORIES.items()])
 
     prompt = f"""
@@ -121,7 +142,7 @@ def get_image_metadata(dynamic_prompt, global_keywords):
     Return ONLY a JSON object with:
     1. "title": Commercial title (60-80 chars, NO commas). Make it highly descriptive. Combine the core concept with practical use-case nouns (e.g., "Abstract Neural Nexus Hub Data Visualization Background"). DO NOT default to AI terms (e.g., "AI-Powered").
     2. "description": A compelling, non-advertising professional 2-3 sentence commercial description (100-200 chars). Act as a describer, not a salesperson. Explain the visual components and suggest how a business might use it (e.g., for presentations, web design, or marketing). CRITICAL: Append " (AI Generated)" at the very end.
-    3. "keywords": List of 50 revenue-optimized keywords ordered by commercial value (total words < 80). INCLUDE these trending keywords if relevant: {', '.join(global_keywords[:5])}. Include multi-word long-tail keywords.
+    3. "keywords": A JSON array of 40-50 keywords. MUST be a mix of single words (e.g., "tech", "data") and short phrases (e.g., "machine learning"). CRITICAL: DO NOT write long sentences. Maximum 3 words per keyword.
     4. "category_id": Pick the BEST primary category ID integer from the strict list above.
     5. "category_id_2": Pick the BEST secondary category ID integer from the strict list above.
     """
@@ -135,7 +156,6 @@ def get_image_metadata(dynamic_prompt, global_keywords):
         data = json.loads(completion.choices[0].message.content)
     except Exception as e:
         print(f"Metadata generation failed: {e}")
-        # Robust default: 112 is Abstract Backgrounds, 210 is IT & C AI
         data = {
             "title": "Modern Abstract Corporate Technology Background", 
             "description": "Premium modern abstract technology background. Perfect for corporate presentations, digital marketing, and data visualization concepts. (AI Generated)",
@@ -144,37 +164,22 @@ def get_image_metadata(dynamic_prompt, global_keywords):
             "category_id_2": 210
         }
 
-    # Post-processing keywords
-    all_keywords = data.get('keywords', [])
-    final_keywords = []
-    total_words = 0
+    # Grab raw keywords and handle potential string hallucination
+    raw_keywords = data.get('keywords', [])
+    if isinstance(raw_keywords, str):
+        raw_keywords = raw_keywords.split(',')
+        
+    data['keywords'] = optimize_keyword_density(raw_keywords)
     
-    premium_keywords = [kw for kw in all_keywords if any(term in kw.lower() for term in 
-                        ['business', 'corporate', 'luxury', 'modern', 'design', 'abstract', 'tech', 'data'])]
-    regular_keywords = [kw for kw in all_keywords if kw not in premium_keywords]
-    
-    premium_keywords.sort(key=lambda x: len(x.split()), reverse=True)
-    sorted_keywords = premium_keywords + regular_keywords
-    
-    for kw in sorted_keywords:
-        kw_word_count = len(kw.split())
-        if (total_words + kw_word_count) <= 80 and len(final_keywords) < 50:
-            final_keywords.append(kw)
-            total_words += kw_word_count
-        else:
-            break
-    
-    data['keywords'] = optimize_keyword_density(final_keywords)
     data['title'] = data.get('title', 'Modern Abstract Tech Design')[:80].replace(',', '')
     
     desc = data.get('description', 'Premium abstract commercial stock photography background. (AI Generated)')
     data['description'] = (desc[:1485] + " (AI Generated)").replace(" (AI Generated) (AI Generated)", " (AI Generated)")
     
-    # Enforce safe category defaults if the AI still hallucinated a bad number
     if data.get('category_id') not in VALID_CATEGORIES:
-        data['category_id'] = 112 # Abstract Backgrounds
+        data['category_id'] = 112 
     if data.get('category_id_2') not in VALID_CATEGORIES:
-        data['category_id_2'] = 210 # AI / Tech
+        data['category_id_2'] = 210 
         
     data['revenue_score'] = score_metadata_revenue_potential(data['title'], data['keywords'], data['category_id'])
     
