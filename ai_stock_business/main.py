@@ -1,259 +1,399 @@
 import sys, time, random, os, json
 from datetime import datetime
-import pytz
 from groq import Groq
-from ddgs import DDGS 
+from ddgs import DDGS
 from dotenv import load_dotenv
 import generator, metadata, uploader
+from generator import STYLE_PROFILE_KEYS, STYLE_PROFILES
 
 load_dotenv()
 
-# --- NEW: LONG-TERM REVENUE SETTINGS ---
-LEDGER_FILE = "concept_ledger.json"
-MAX_IMAGES_PER_CONCEPT = 15 # The cannibalization limit
+LEDGER_FILE             = "concept_ledger.json"
+MAX_IMAGES_PER_CONCEPT  = 15
 
+# Styles that share warm/gold tones — hard cap to 1 per batch
+WARM_GOLD_FAMILY = {"luxury_gold", "finance_power", "warm_earth", "architecture_geo"}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LEDGER
+# ─────────────────────────────────────────────────────────────────────────────
 def load_ledger():
     if os.path.exists(LEDGER_FILE):
         try:
             with open(LEDGER_FILE, "r") as f:
-                return json.load(f)
+                data = json.load(f)
+                # Migrate old flat-dict format
+                if data and "concepts" not in data:
+                    return {"concepts": data, "styles": {}}
+                return data
         except:
             pass
-    return {}
+    return {"concepts": {}, "styles": {}}
 
-def update_ledger(concept):
-    ledger = load_ledger()
-    ledger[concept] = ledger.get(concept, 0) + 1
+def save_ledger(ledger):
     with open(LEDGER_FILE, "w") as f:
         json.dump(ledger, f, indent=4)
-# ----------------------------------------
 
-def get_current_pst_date():
-    pst = pytz.timezone('US/Pacific')
-    return datetime.now(pst).strftime("%B %d, %Y")
+def update_ledger(concept, style_key):
+    ledger = load_ledger()
+    ledger["concepts"][concept] = ledger["concepts"].get(concept, 0) + 1
+    ledger["styles"][style_key] = ledger["styles"].get(style_key, 0) + 1
+    save_ledger(ledger)
 
-def get_current_month():
-    return datetime.now().strftime("%B")
 
-def get_week_of_month():
-    day = datetime.now().day
-    return (day - 1) // 7 + 1
+# ─────────────────────────────────────────────────────────────────────────────
+# STYLE CYCLER  — TRUE ROUND-ROBIN
+#
+# Guarantees:
+#   1. Every style is used before any style repeats (like shuffling a deck).
+#   2. No two consecutive images share the same style.
+#   3. Max 1 image from the warm/gold color family per batch.
+#   4. Historically over-used styles get pushed toward the end of the queue.
+# ─────────────────────────────────────────────────────────────────────────────
+class StyleCycler:
+    def __init__(self, target_count: int):
+        ledger       = load_ledger()
+        style_counts = ledger.get("styles", {})
 
+        # Sort styles least-used → most-used so least-used come first
+        sorted_styles = sorted(
+            STYLE_PROFILE_KEYS,
+            key=lambda k: style_counts.get(k, 0)
+        )
+
+        # Build enough shuffled decks to cover target_count
+        self._queue = self._build_round_robin_queue(sorted_styles, target_count)
+        self._last  = None
+
+        # Track gold-family usage for this batch
+        self._warm_gold_used = 0
+
+    def _build_round_robin_queue(self, sorted_styles, n):
+        """
+        Fill a queue of length n by cycling through shuffled-deck passes.
+        Within each pass, least-used styles stay near the front.
+        """
+        queue  = []
+        styles = list(sorted_styles)  # copy
+
+        while len(queue) < n:
+            deck = list(styles)
+            random.shuffle(deck)
+            queue.extend(deck)
+
+        return queue[:n]
+
+    def next(self) -> str:
+        MAX_ATTEMPTS = len(STYLE_PROFILE_KEYS) * 2
+
+        for _ in range(MAX_ATTEMPTS):
+            if not self._queue:
+                # Refill if somehow exhausted
+                deck = list(STYLE_PROFILE_KEYS)
+                random.shuffle(deck)
+                self._queue = deck
+
+            candidate = self._queue.pop(0)
+
+            # Rule 1: no immediate repeat
+            if candidate == self._last:
+                self._queue.append(candidate)
+                continue
+
+            # Rule 2: max 1 warm/gold style per batch
+            if candidate in WARM_GOLD_FAMILY and self._warm_gold_used >= 1:
+                self._queue.append(candidate)
+                continue
+
+            # Candidate accepted
+            if candidate in WARM_GOLD_FAMILY:
+                self._warm_gold_used += 1
+            self._last = candidate
+            return candidate
+
+        # Absolute fallback — pick anything not same as last
+        fallback = random.choice([k for k in STYLE_PROFILE_KEYS if k != self._last])
+        self._last = fallback
+        return fallback
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TIMING INTEL
+# ─────────────────────────────────────────────────────────────────────────────
 def get_day_of_week_impact():
-    day = datetime.now().weekday()
-    impact_map = {
-        0: {"name": "Monday", "buyer_type": "corporate", "multiplier": 1.1},      
-        1: {"name": "Tuesday", "buyer_type": "corporate", "multiplier": 1.15},   
-        2: {"name": "Wednesday", "buyer_type": "corporate", "multiplier": 1.12},  
-        3: {"name": "Thursday", "buyer_type": "corporate", "multiplier": 1.08},   
-        4: {"name": "Friday", "buyer_type": "mixed", "multiplier": 1.0},          
-        5: {"name": "Saturday", "buyer_type": "leisure", "multiplier": 0.9},      
-        6: {"name": "Sunday", "buyer_type": "leisure", "multiplier": 0.85}       
-    }
-    return impact_map.get(day, {"name": "Unknown", "buyer_type": "mixed", "multiplier": 1.0})
+    return {
+        0: {"name": "Monday",    "buyer_type": "corporate", "multiplier": 1.10},
+        1: {"name": "Tuesday",   "buyer_type": "corporate", "multiplier": 1.15},
+        2: {"name": "Wednesday", "buyer_type": "corporate", "multiplier": 1.12},
+        3: {"name": "Thursday",  "buyer_type": "corporate", "multiplier": 1.08},
+        4: {"name": "Friday",    "buyer_type": "mixed",     "multiplier": 1.00},
+        5: {"name": "Saturday",  "buyer_type": "leisure",   "multiplier": 0.90},
+        6: {"name": "Sunday",    "buyer_type": "leisure",   "multiplier": 0.85},
+    }.get(datetime.now().weekday(),
+          {"name": "Unknown", "buyer_type": "mixed", "multiplier": 1.0})
 
 def get_optimal_upload_timing():
-    day_info = get_day_of_week_impact()
-    week = get_week_of_month()
-    timing_score = 0
-    if day_info['buyer_type'] == 'corporate': timing_score += 20
-    if week <= 2: timing_score += 15  
-    if 9 <= datetime.now().hour <= 11: timing_score += 10
-    
+    day   = get_day_of_week_impact()
+    week  = (datetime.now().day - 1) // 7 + 1
+    score = 0
+    if day["buyer_type"] == "corporate": score += 20
+    if week <= 2:                         score += 15
+    if 9 <= datetime.now().hour <= 11:    score += 10
     return {
-        'day_info': day_info,
-        'week': week,
-        'timing_score': timing_score,
-        'recommendation': 'UPLOAD NOW' if timing_score >= 35 else 'WAIT for better timing'
+        "day_info":       day,
+        "week":           week,
+        "timing_score":   score,
+        "recommendation": "UPLOAD NOW" if score >= 35 else "WAIT for better timing",
     }
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LIVE MARKET CONTEXT
+# ─────────────────────────────────────────────────────────────────────────────
 def get_dynamic_market_context():
-    current_month = get_current_month()
-    current_year = datetime.now().year
+    month = datetime.now().strftime("%B")
+    year  = datetime.now().year
     queries = [
-        f"major business and tech events {current_month} {current_year}",
-        f"trending marketing and design aesthetics {current_month} {current_year}"
+        f"best selling stock photography categories {year}",
+        f"trending stock image buyer demand {month} {year}",
+        f"stock photo market niches high revenue {year}",
     ]
-    
-    search_context = []
-    print(f"Scraping live market intelligence for {current_month} {current_year}...")
-    
+    results = []
+    print("  Fetching live market data...")
     try:
         with DDGS() as ddgs:
-            for query in queries:
-                results = ddgs.text(query, max_results=3)
-                for r in results:
-                    search_context.append(r.get('body', ''))
-                time.sleep(1) 
+            for q in queries:
+                for r in ddgs.text(q, max_results=3):
+                    results.append(r.get("body", ""))
+                time.sleep(1)
     except Exception as e:
-        print(f"Search API warning: {e}. Falling back to general business logic.")
-        return f"General corporate and business trends for {current_month}."
+        print(f"  Search warning: {e}. Using general market logic.")
+        return f"General commercial photography demand for {month} {year}."
+    combined = " ".join(results)[:2500]
+    return combined if combined.strip() else f"General commercial photography trends for {month}."
 
-    combined_context = " ".join(search_context)[:2000]
-    if not combined_context.strip():
-        return f"General corporate and business trends for {current_month}."
-        
-    return combined_context
 
-def get_master_strategy(live_market_context, target_count):
-    client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-    current_month = get_current_month()
-    day_info = get_day_of_week_impact()
-    
-    # --- NEW: Ledger Extraction for Saturated Concepts ---
-    ledger = load_ledger()
-    saturated_concepts = [k for k, v in ledger.items() if v >= MAX_IMAGES_PER_CONCEPT]
-    saturated_text = ", ".join(saturated_concepts) if saturated_concepts else "None yet."
-    
-    historical_context = "No historical sales data available yet."
+# ─────────────────────────────────────────────────────────────────────────────
+# MASTER STRATEGY  (single LLM call)
+# ─────────────────────────────────────────────────────────────────────────────
+def get_global_intelligence(live_market_context, target_count, style_queue):
+    """
+    style_queue: ordered list of style_keys assigned for this batch.
+    We pass it to the LLM so niche concepts are matched to their visual style —
+    preventing the LLM from suggesting 4 gold-themed niches.
+    """
+    client  = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    month   = datetime.now().strftime("%B")
+    ledger  = load_ledger()
+
+    saturated = [k for k, v in ledger.get("concepts", {}).items()
+                 if v >= MAX_IMAGES_PER_CONCEPT]
+    saturated_text = ", ".join(saturated) or "None yet."
+
+    historical = "No historical sales data yet."
     if os.path.exists("market_memory.json"):
         try:
-            with open("market_memory.json", "r") as f:
-                memory = json.load(f)
-                top_3 = [f"{m['niche']} (${m['revenue']:.2f})" for m in memory[:3]]
-                historical_context = f"YOUR ACTUAL ALL-TIME BEST SELLERS: {', '.join(top_3)}. Prioritize generating assets similar to these proven earners."
+            with open("market_memory.json") as f:
+                mem    = json.load(f)
+                top_3  = [f"{m['niche']} (${m['revenue']:.2f})" for m in mem[:3]]
+                historical = f"BEST SELLERS: {', '.join(top_3)}."
         except:
             pass
 
-    print(f"Generating Master Strategy from live data and historical memory...")
+    # Build style assignment info for the LLM
+    style_assignments = []
+    for i, sk in enumerate(style_queue):
+        label   = STYLE_PROFILES[sk]["label"]
+        palette = STYLE_PROFILES[sk]["palette"].split("—")[0].strip()  # drop prohibitions
+        style_assignments.append(f'  Image {i+1}: style="{label}", palette="{palette}"')
+    style_assignment_str = "\n".join(style_assignments)
 
-    # 70/30 Split and Saturated Concept Ban
     prompt = f"""
-    You are a stock photography strategist. You must synthesize LIVE market data with the user's HISTORICAL sales data to maximize profit.
-    
-    LIVE MARKET CONTEXT:
-    {live_market_context}
-    
-    HISTORICAL PERFORMANCE MEMORY:
-    {historical_context}
-    
-    SATURATED CONCEPTS (DO NOT USE THESE):
-    {saturated_text}
-    
-    Today is a {day_info['name']}. Buyers are looking for {day_info['buyer_type']} content.
-    
-    Return ONLY a valid JSON object. Do not include markdown formatting or conversational text.
-    Structure the JSON exactly like this:
-    {{
-        "niches": [
-            {{"name": "niche keyword phrase", "viability_score": 85, "exclusive_percent": 60, "type": "evergreen"}},
-            {{"name": "another specific niche", "viability_score": 92, "exclusive_percent": 80, "type": "trending"}}
-        ]
-    }}
-    
-    Rules:
-    1. Provide exactly {max(3, target_count * 2)} niches.
-    2. CRITICAL PORTFOLIO SPLIT: Make roughly 70% of the niches "evergreen" (timeless business/tech concepts like cybersecurity, teamwork, cloud data that always sell) and 30% "trending" (based on the live market context).
-    3. NEVER suggest a niche from the SATURATED CONCEPTS list.
-    4. Heavily weight the 'viability_score' toward concepts proven in the HISTORICAL PERFORMANCE MEMORY.
-    5. Niches MUST be abstract, business, tech, or design focused. NO faces or humans.
-    6. viability_score is 0-100 based on profit potential minus saturation.
-    7. exclusive_percent is 20-100 based on how unique the niche is.
-    """
+You are a commercial stock photography portfolio strategist.
 
+LIVE MARKET: {live_market_context}
+HISTORICAL:  {historical}
+SATURATED (DO NOT USE): {saturated_text}
+CURRENT MONTH: {month}
+
+The next batch will contain {target_count} images with these PRE-ASSIGNED visual styles:
+{style_assignment_str}
+
+For EACH image slot, generate ONE niche concept that:
+  - PERFECTLY MATCHES the assigned style and palette (e.g. do not assign a "fintech" 
+    niche to a terracotta/mineral style — that would be incoherent).
+  - Is abstract/conceptual with NO people.
+  - Targets a real stock photo buyer segment.
+  - Is NOT saturated.
+
+Return ONLY a valid JSON object:
+{{
+    "niches": [
+        {{
+            "name": "niche concept (2-5 words)",
+            "viability_score": 85,
+            "exclusive_percent": 50,
+            "type": "evergreen",
+            "assigned_style_index": 0
+        }}
+    ],
+    "global_keywords": ["20", "cross-market", "high-volume", "stock", "keywords"]
+}}
+
+RULES:
+1. Provide exactly {target_count} niches, one per image slot, in order.
+2. Each niche must make visual sense for its assigned style palette.
+3. Distribute across different buyer markets — healthcare, finance, tech, 
+   creative, architecture, etc. DO NOT cluster multiple niches in the same market.
+4. viability_score should be honest (70-99), not all 85.
+"""
+
+    print("  Consulting LLM for style-matched niche strategy...")
     try:
         completion = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
         )
         return json.loads(completion.choices[0].message.content)
     except Exception as e:
-        print(f"Master strategy generation failed: {e}. Using safe defaults.")
+        print(f"  Strategy LLM failed: {e}. Using safe defaults.")
+        fallback_niches = [
+            {"name": "artificial intelligence network",  "viability_score": 90, "exclusive_percent": 50, "type": "evergreen", "assigned_style_index": i}
+            for i in range(target_count)
+        ]
         return {
-            "niches": [
-                {"name": f"modern corporate tech abstract", "viability_score": 85, "exclusive_percent": 50, "type": "evergreen"},
-                {"name": f"{current_month} business trends background", "viability_score": 75, "exclusive_percent": 50, "type": "trending"}
-            ]
+            "niches":          fallback_niches,
+            "global_keywords": ["abstract", "background", "business", "modern", "professional",
+                                 "commercial", "design", "premium", "digital", "technology",
+                                 "creative", "minimal", "corporate", "stock photo", "artistic"],
         }
 
-def main():
-    try:
-        target_count = int(sys.argv[1]) if len(sys.argv) > 1 else 1
-    except: target_count = 1
 
-    if not os.path.exists('temp_images'): os.makedirs('temp_images')
-    # Create the local folder for Adobe Stock exports
-    if not os.path.exists('Adobe_Stock_Batches'): os.makedirs('Adobe_Stock_Batches')
-    
-    print(f"--- LAUNCHING OPTIMIZED PRODUCTION: {target_count} ASSETS ---")
-    
-    timing_intel = get_optimal_upload_timing()
-    print(f"Upload timing: {timing_intel['day_info']['name']} - {timing_intel['recommendation']}")
-    
-    live_context = get_dynamic_market_context()
-    strategy = get_master_strategy(live_context, target_count)
-    niches = sorted(strategy.get('niches', []), key=lambda x: x.get('viability_score', 0), reverse=True)
-    
-    global_styles = generator.get_trending_design_styles()
-    global_keywords = metadata.get_trending_keywords()
-    
-    batch_results = []
+# ─────────────────────────────────────────────────────────────────────────────
+# MAIN
+# ─────────────────────────────────────────────────────────────────────────────
+def main():
+    target_count = int(sys.argv[1]) if len(sys.argv) > 1 else 1
+
+    os.makedirs("temp_images",         exist_ok=True)
+    os.makedirs("Adobe_Stock_Batches", exist_ok=True)
+
+    print(f"\n{'='*65}")
+    print(f"  LAUNCHING DIVERSIFIED PRODUCTION: {target_count} ASSETS")
+    print(f"{'='*65}\n")
+
+    timing = get_optimal_upload_timing()
+    print(f"  Upload timing: {timing['day_info']['name']} — {timing['recommendation']}\n")
+
+    # ── 1. Build style queue FIRST (before LLM call) ─────────────────────────
+    cycler      = StyleCycler(target_count)
+    style_queue = [cycler.next() for _ in range(target_count)]
+
+    print("  Style assignment for this batch:")
+    for i, sk in enumerate(style_queue):
+        print(f"    {i+1}. {STYLE_PROFILES[sk]['label']}")
+    print()
+
+    # ── 2. Fetch market intelligence with style context ───────────────────────
+    live_context    = get_dynamic_market_context()
+    intel           = get_global_intelligence(live_context, target_count, style_queue)
+    niches          = intel.get("niches", [])
+    global_keywords = intel.get("global_keywords", ["business", "abstract", "modern"])
+
+    # Pad niches if LLM returned fewer than needed
+    while len(niches) < target_count:
+        niches.append({
+            "name": "abstract commercial background",
+            "viability_score": 75,
+            "exclusive_percent": 40,
+            "type": "evergreen",
+            "assigned_style_index": len(niches),
+        })
+
+    # ── 3. Generate each image ────────────────────────────────────────────────
+    batch_results  = []
     failed_uploads = []
-    ratio_counter = 0
-    
-    for niche_data in niches:
-        if len(batch_results) >= target_count: break
-        
-        base_niche = niche_data.get('name', 'abstract corporate')
-        niche_type = niche_data.get('type', 'evergreen')
-        viability = niche_data.get('viability_score', 50)
-        exclusive_threshold = niche_data.get('exclusive_percent', 40) / 100.0
-        
-        print(f"Processing ({len(batch_results)+1}/{target_count}): [{niche_type.upper()}] {base_niche} [viability={viability}]")
-        
+
+    for i in range(target_count):
+        niche_data  = niches[i] if i < len(niches) else niches[-1]
+        style_key   = style_queue[i]
+        base_niche  = niche_data.get("name", "abstract commercial background")
+        niche_type  = niche_data.get("type", "evergreen")
+        excl_thresh = niche_data.get("exclusive_percent", 40) / 100.0
+
+        print(f"\n  ── IMAGE {i+1}/{target_count} ───────────────────────────────")
+        print(f"  Niche    : [{niche_type.upper()}] {base_niche}")
+
         max_retries = 2
         for attempt in range(max_retries):
             try:
-                img_path, dynamic_prompt = generator.generate_and_save(
-                    base_niche, 
-                    ratio_index=ratio_counter, 
-                    is_exclusive=random.random() < exclusive_threshold,
-                    global_styles=global_styles
+                visual_prompt, meta = metadata.generate_prompt_and_metadata(
+                    niche           = base_niche,
+                    style           = STYLE_PROFILES[style_key]["label"],
+                    palette         = STYLE_PROFILES[style_key]["palette"].split("—")[0].strip(),
+                    global_keywords = global_keywords,
+                    style_key       = style_key,
                 )
-                ratio_counter += 1
-                
-                meta = metadata.get_image_metadata(dynamic_prompt, global_keywords)
-                
-                batch_results.append({
-                    'path': img_path, 
-                    'meta': meta,
-                    'is_exclusive': random.random() < exclusive_threshold,
-                    'niche': base_niche,
-                    'timestamp': time.time()
-                })
-                
-                # --- NEW: Log the success to the ledger ---
-                update_ledger(base_niche)
-                
-                time.sleep(12) 
-                break
-                
-            except Exception as e:
-                error_msg = str(e).lower()
-                print(f"Pipeline error (attempt {attempt+1}/{max_retries}): {e}")
-                
-                if "429" in error_msg or "throttled" in error_msg or "rate limit" in error_msg:
-                    print("--> Rate limit hit. Cooling down API for 15 seconds...")
-                    time.sleep(15)
-                else:
-                    time.sleep(2)
-                
-                if attempt == max_retries - 1:
-                    failed_uploads.append({'keyword': base_niche, 'error': str(e)})
 
+                img_path = generator.generate_and_save(
+                    visual_prompt = visual_prompt,
+                    ratio_index   = i,
+                    is_exclusive  = random.random() < excl_thresh,
+                    style_key     = style_key,
+                )
+
+                batch_results.append({
+                    "path":         img_path,
+                    "meta":         meta,
+                    "is_exclusive": random.random() < excl_thresh,
+                    "niche":        base_niche,
+                    "style_key":    style_key,
+                    "timestamp":    time.time(),
+                })
+
+                update_ledger(base_niche, style_key)
+                time.sleep(5)
+                break
+
+            except Exception as e:
+                print(f"  Pipeline error (attempt {attempt+1}/{max_retries}): {e}")
+                time.sleep(10)
+                if attempt == max_retries - 1:
+                    failed_uploads.append({"keyword": base_niche, "error": str(e)})
+
+    # ── 4. Summary & upload ───────────────────────────────────────────────────
     if batch_results:
-        # Note: Your new uploader.py handles BOTH the Adobe Stock local export and the Dreamstime FTP
-        upload_success = uploader.batch_upload_to_dreamstime(batch_results)
-        if upload_success:
-            print(f"--- SUCCESS: {len(batch_results)} assets processed ---")
-        else:
-            print(f"--- WARNING: Upload failed, retrying ---")
+        print(f"\n  BATCH SUMMARY:")
+        style_dist = {}
+        for r in batch_results:
+            label = STYLE_PROFILES[r["style_key"]]["label"]
+            style_dist[label] = style_dist.get(label, 0) + 1
+        for label, count in style_dist.items():
+            print(f"    {count}x  {label}")
+
+        scores    = [r["meta"].get("revenue_score", 0) for r in batch_results]
+        avg_score = sum(scores) / len(scores) if scores else 0
+        print(f"  Avg revenue score : {avg_score:.1f}/100")
+        print(f"  Keyword avg count : {sum(len(r['meta'].get('keywords',[])) for r in batch_results)//len(batch_results)}/50\n")
+
+        success = uploader.batch_upload_to_dreamstime(batch_results)
+        if not success:
+            print("  Upload failed — retrying once...")
             time.sleep(5)
             uploader.batch_upload_to_dreamstime(batch_results)
+    else:
+        print("  No assets generated successfully.")
 
     if failed_uploads:
-        print(f"Notice: {len(failed_uploads)} generations failed or hit hard API limits.")
+        print(f"\n  {len(failed_uploads)} failure(s):")
+        for f in failed_uploads:
+            print(f"    - {f['keyword']}: {f['error']}")
+
+    print(f"\n{'='*65}")
+    print(f"  DONE: {len(batch_results)}/{target_count} assets processed.")
+    print(f"{'='*65}\n")
+
 
 if __name__ == "__main__":
     main()
