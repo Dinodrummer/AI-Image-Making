@@ -1,78 +1,353 @@
 {
     "concepts": {
-        "Cloud Data Storage for Small Business": 1,
-        "Cybersecurity Data Protection Strategies": 1,
-        "Cybersecurity for Virtual Environments": 1,
-        "Cybersecurity in the Cloud": 1,
-        "Cybersecurity Best Practices for Remote Teams": 1,
-        "Artificial Intelligence-powered Content Creation": 1,
-        "Virtual Event Planning and Execution": 1,
-        "Cybersecurity for Internet of Things (IoT)": 1,
-        "Blockchain-based Identity Verification": 1,
-        "Artificial Intelligence in Cybersecurity": 1,
-        "Digital Transformation in Manufacturing Industry": 1,
-        "Cloud-based Financial Data Analysis": 1,
-        "Smart Building Technology for Offices": 1,
-        "AI-Powered Finance Tools": 1,
-        "Abstract Digital Art for Web 3.0": 1,
-        "Blockchain Security Best Practices": 1,
-        "Artificial General Intelligence": 1,
-        "Cloud Native Architecture": 1,
-        "Digital Twin Solutions": 1,
-        "Quantum Computing Applications": 1,
-        "Autonomous Vehicle Technology": 1,
-        "Digital Payments System": 1,
-        "Electric Vehicle Charging Solutions": 1,
-        "Space Exploration Technologies": 1,
-        "Cybersecurity Awareness Training": 1,
-        "Artificial Intelligence for Customer Service": 1,
-        "Information Security Consulting": 1,
-        "Cloud Storage Security": 1,
-        "Digital Transformation Strategy": 1,
-        "Artificial Intelligence in Financial Services": 1,
-        "Internet of Medical Things (IoMT)": 1,
-        "Digital Payment Processing": 1,
-        "Artificial Intelligence Ethics in Healthcare": 1,
-        "Cybersecurity for Industrial Control Systems": 1,
-        "Digital Identity Verification": 1,
-        "Network Security Solutions": 1,
-        "Cybersecurity Awareness Training for Employees": 1,
-        "Information Security for Cloud Computing": 1,
-        "Cybersecurity Consulting Services": 1,
-        "Artificial Intelligence for Marketing": 1,
-        "Digital Transformation for E-commerce": 1,
-        "Luxury Minimalist Interiors": 1,
-        "Financial Blockchain Technology": 1,
-        "Luxury Vacation Real Estate": 1,
-        "Luxury Watch Collection": 1,
-        "Healthcare Technology Innovations": 1,
-        "Biotech Lab Science Research": 1,
-        "Financial Planning for Women": 1,
-        "Blockchain Cryptocurrency Trade": 1,
-        "Finance Investment Diversification": 1,
-        "Artificial Intelligence Cybersecurity": 1,
-        "Neon Hacking Hub": 1,
-        "Fractured Crystal Growth": 1,
-        "Electric Wind Farms": 1,
-        "Lab-Grown Organics": 1,
-        "Geometric Nordic Landscapes": 1,
-        "Corporate Data Centers": 1
+        "Cloud Data Storage for Small Business": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Cybersecurity Data Protection Strategies": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Cybersecurity for Virtual Environments": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Cybersecurity in the Cloud": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Cybersecurity Best Practices for Remote Teams": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Artificial Intelligence-powered Content Creation": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Virtual Event Planning and Execution": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Cybersecurity for Internet of Things (IoT)": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Blockchain-based Identity Verification": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Artificial Intelligence in Cybersecurity": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Digital Transformation in Manufacturing Industry": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Cloud-based Financial Data Analysis": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Smart Building Technology for Offices": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "AI-Powered Finance Tools": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Abstract Digital Art for Web 3.0": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Blockchain Security Best Practices": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Artificial General Intelligence": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Cloud Native Architecture": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Digital Twin Solutions": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Quantum Computing Applications": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Autonomous Vehicle Technology": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Digital Payments System": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Electric Vehicle Charging Solutions": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Space Exploration Technologies": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Cybersecurity Awareness Training": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Artificial Intelligence for Customer Service": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Information Security Consulting": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Cloud Storage Security": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Digital Transformation Strategy": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Artificial Intelligence in Financial Services": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Internet of Medical Things (IoMT)": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Digital Payment Processing": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Artificial Intelligence Ethics in Healthcare": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Cybersecurity for Industrial Control Systems": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Digital Identity Verification": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Network Security Solutions": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Cybersecurity Awareness Training for Employees": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Information Security for Cloud Computing": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Cybersecurity Consulting Services": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Artificial Intelligence for Marketing": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Digital Transformation for E-commerce": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Luxury Minimalist Interiors": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Financial Blockchain Technology": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Luxury Vacation Real Estate": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Luxury Watch Collection": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Healthcare Technology Innovations": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Biotech Lab Science Research": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Financial Planning for Women": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Blockchain Cryptocurrency Trade": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Finance Investment Diversification": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Artificial Intelligence Cybersecurity": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Neon Hacking Hub": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Fractured Crystal Growth": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Electric Wind Farms": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Lab-Grown Organics": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Geometric Nordic Landscapes": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Corporate Data Centers": {
+            "count": 1,
+            "last_used": 1777171401.6573946
+        },
+        "Eco-Friendly Lab Innovations": {
+            "count": 1,
+            "last_used": 1777171401.657475
+        },
+        "Renewable Energy Harvest Grids": {
+            "count": 1,
+            "last_used": 1777171435.2877667
+        },
+        "Bio-Diversity Ocean Currents Visuals": {
+            "count": 1,
+            "last_used": 1777171467.3015804
+        },
+        "Digital Wavefront Horizon": {
+            "count": 1,
+            "last_used": 1777172105.4152205
+        },
+        "Blooming Terracotta Harvest": {
+            "count": 1,
+            "last_used": 1777172139.385359
+        },
+        "Energy Source Frenzy": {
+            "count": 1,
+            "last_used": 1777172181.4386172
+        },
+        "Frozen Nexus Portal": {
+            "count": 1,
+            "last_used": 1777172214.657772
+        },
+        "Life Science DNA Double Helix": {
+            "count": 1,
+            "last_used": 1777172248.3126512
+        },
+        "Dark Mode Algorithmic Bloom": {
+            "count": 1,
+            "last_used": 1777172279.7419207
+        },
+        "Mechanical Gearwork Harmonics": {
+            "count": 1,
+            "last_used": 1777172311.1537826
+        },
+        "Corporate Boardroom Expansion": {
+            "count": 1,
+            "last_used": 1777173343.8150551
+        },
+        "Eco-Cycle Harmony": {
+            "count": 1,
+            "last_used": 1777185788.2311502
+        },
+        "Frozen Light Refraction": {
+            "count": 1,
+            "last_used": 1777185844.7637382
+        },
+        "Digital Vortex": {
+            "count": 1,
+            "last_used": 1777185895.0992827
+        },
+        "Geological Strata": {
+            "count": 1,
+            "last_used": 1777185943.3678215
+        },
+        "Royalty in Bloom": {
+            "count": 1,
+            "last_used": 1777185979.5974662
+        },
+        "Renewable Energy Waves": {
+            "count": 1,
+            "last_used": 1777186011.3260493
+        },
+        "Petri Dish Bloom": {
+            "count": 1,
+            "last_used": 1777186045.79927
+        },
+        "Minimalist Landscape": {
+            "count": 1,
+            "last_used": 1777186079.4967997
+        },
+        "Financial Graphite": {
+            "count": 1,
+            "last_used": 1777186110.4456558
+        },
+        "Network Node": {
+            "count": 1,
+            "last_used": 1777186143.2447367
+        },
+        "Eco-Friendly Travel Company Summer Campaign": {
+            "count": 1,
+            "last_used": 1777281337.124157
+        },
+        "Corporate Sustainability Presentation Background": {
+            "count": 1,
+            "last_used": 1777281366.9523716
+        },
+        "High-Tech Data Storage Solutions Launch Ad": {
+            "count": 1,
+            "last_used": 1777281405.9587922
+        },
+        "Luxury Wellness Retreat Print Advertisement": {
+            "count": 1,
+            "last_used": 1777281437.265729
+        },
+        "Ice Skating Rink Summer Camp Promotion Image": {
+            "count": 1,
+            "last_used": 1777281470.6031518
+        }
     },
     "styles": {
         "luxury_gold": 3,
-        "finance_power": 4,
-        "healthcare_science": 3,
-        "tech_network": 2,
-        "vibrant_gradient": 0,
+        "finance_power": 6,
+        "healthcare_science": 6,
+        "tech_network": 3,
+        "vibrant_gradient": 3,
         "architecture_geo": 0,
-        "energy_explosive": 1,
-        "dark_neon": 1,
-        "organic_texture": 0,
-        "minimal_geometric": 1,
-        "sustainability_green": 0,
-        "chrome_mechanical": 0,
-        "royal_purple": 0,
-        "warm_earth": 0,
-        "ice_glass": 1
+        "energy_explosive": 2,
+        "dark_neon": 3,
+        "organic_texture": 1,
+        "minimal_geometric": 2,
+        "sustainability_green": 3,
+        "chrome_mechanical": 2,
+        "royal_purple": 2,
+        "warm_earth": 2,
+        "ice_glass": 4
     }
 }

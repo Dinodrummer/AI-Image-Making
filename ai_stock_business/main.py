@@ -205,7 +205,9 @@ The next batch will contain {target_count} images with these PRE-ASSIGNED visual
 
 For EACH image slot, generate ONE niche concept that:
   - PERFECTLY MATCHES the assigned style and palette.
-  - Is abstract/conceptual with NO people.
+  - Is a SPECIFIC COMMERCIAL USE-CASE (e.g., 'Corporate sustainability presentation background', 'Healthcare data encryption layout').
+  - Is NOT purely artistic, surreal, or chaotic "art for art's sake".
+  - Has a clear TARGET BUYER (e.g., 'Fintech Marketer', 'Eco-friendly Brand Designer').
   - Mixes evergreen business themes with upcoming seasonal trends.
   - Is NOT saturated.
 
@@ -213,9 +215,10 @@ Return ONLY a valid JSON object:
 {{
     "niches": [
         {{
-            "name": "niche concept (2-5 words)",
+            "name": "specific commercial use-case (4-8 words)",
+            "target_buyer": "profession of target buyer",
+            "visual_directive": "Specific visual styling instruction based on LIVE MARKET trends (e.g., 'Use soft pastel gradients trending for spring', 'Incorporate tech-noir neon as currently demanded')",
             "viability_score": 85,
-            "exclusive_percent": 50,
             "type": "evergreen or seasonal",
             "assigned_style_index": 0
         }}
@@ -238,7 +241,7 @@ RULES:
     except Exception as e:
         print(f"  Strategy LLM failed: {e}. Using safe defaults.")
         return {
-            "niches": [{"name": "artificial intelligence network", "viability_score": 90, "exclusive_percent": 50, "type": "evergreen", "assigned_style_index": i} for i in range(target_count)],
+            "niches": [{"name": "cybersecurity network background", "target_buyer": "Tech Presentation Designer", "visual_directive": "Focus on glowing nodes and deep blue tech styling", "viability_score": 90, "exclusive_percent": 50, "type": "evergreen", "assigned_style_index": i} for i in range(target_count)],
             "global_keywords": ["abstract", "business", "modern", "professional", "technology", "creative"],
         }
 
@@ -248,8 +251,8 @@ RULES:
 def main():
     target_count = int(sys.argv[1]) if len(sys.argv) > 1 else 1
     os.makedirs("temp_images", exist_ok=True)
-    os.makedirs("Adobe_Stock_Batches", exist_ok=True)
-    os.makedirs("Shutterstock_Batches", exist_ok=True)
+    os.makedirs("Other_Stock_Batches", exist_ok=True)
+    #os.makedirs("Shutterstock_Batches", exist_ok=True)
 
     print(f"\n{'='*65}\n  LAUNCHING DIVERSIFIED PRODUCTION: {target_count} ASSETS\n{'='*65}\n")
 
@@ -267,7 +270,7 @@ def main():
     while len(niches) < target_count:
         niches.append({
             "name": "abstract commercial background", "viability_score": 75,
-            "exclusive_percent": 40, "type": "evergreen", "assigned_style_index": len(niches),
+            "type": "evergreen", "assigned_style_index": len(niches),
         })
 
     batch_results  = []
@@ -277,29 +280,36 @@ def main():
         niche_data  = niches[i] if i < len(niches) else niches[-1]
         style_key   = style_queue[i]
         base_niche  = niche_data.get("name", "abstract commercial background")
-        niche_type  = niche_data.get("type", "evergreen")
-        excl_thresh = niche_data.get("exclusive_percent", 40) / 100.0
+        niche_type   = niche_data.get("type", "evergreen")
+        target_buyer = niche_data.get("target_buyer", "Corporate Designer")
+        excl_thresh  = niche_data.get("exclusive_percent", 40) / 100.0
 
         print(f"\n  ── IMAGE {i+1}/{target_count} ───────────────────────────────")
-        print(f"  Niche    : [{niche_type.upper()}] {base_niche}")
+        print(f"  Niche    : [{niche_type.upper()}] {base_niche} (For: {target_buyer})")
 
         max_retries = 2
         for attempt in range(max_retries):
             try:
+                trend_directive = niche_data.get("visual_directive", "")
+                
                 visual_prompt, meta = metadata.generate_prompt_and_metadata(
                     niche=base_niche, style=STYLE_PROFILES[style_key]["label"],
                     palette=STYLE_PROFILES[style_key]["palette"].split("—")[0].strip(),
                     global_keywords=global_keywords, style_key=style_key,
+                    niche_type=niche_type,
+                    trend_directive=trend_directive,
+                    target_buyer=target_buyer
                 )
 
                 img_path = generator.generate_and_save(
                     visual_prompt=visual_prompt, ratio_index=i,
-                    is_exclusive=random.random() < excl_thresh, style_key=style_key,
+                    is_exclusive=False, style_key=style_key,
+                    meta_data=meta
                 )
 
                 batch_results.append({
                     "path": img_path, "meta": meta,
-                    "is_exclusive": random.random() < excl_thresh,
+                    "is_exclusive": False,
                     "niche": base_niche, "style_key": style_key, "timestamp": time.time(),
                 })
 

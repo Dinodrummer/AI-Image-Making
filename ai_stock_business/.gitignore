@@ -1,4 +1,5 @@
 .env
 temp_images/
 __pycache__/
-Adobe_Stock_Batches/
+Other_Stock_Batches/
+failed_files/

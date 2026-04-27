@@ -8,10 +8,10 @@ import ftplib, csv, os, io, time, shutil
 STYLE_ADOBE_CATEGORY = {
     "tech_network":         19,   # Technology
     "luxury_gold":           8,   # Graphic Resources
-    "finance_power":         4,   # Business
+    "finance_power":         3,   # Business (was 4 Drinks)
     "vibrant_gradient":      8,   # Graphic Resources
     "healthcare_science":   16,   # Science
-    "architecture_geo":      3,   # Architecture
+    "architecture_geo":      2,   # Buildings and Architecture (was 3 Business)
     "energy_explosive":     10,   # Industry
     "dark_neon":             8,   # Graphic Resources
     "organic_texture":       8,   # Graphic Resources
@@ -27,7 +27,7 @@ DEFAULT_ADOBE_CATEGORY = 19
 
 
 def get_next_batch_id():
-    base_dir = "Adobe_Stock_Batches"
+    base_dir = "Other_Stock_Batches"
     if not os.path.exists(base_dir):
         return 1
     max_batch = 0
@@ -42,50 +42,71 @@ def get_next_batch_id():
     return max_batch + 1
 
 
-def export_to_adobe_stock_local(results_list, batch_id):
-    adobe_dir = os.path.join("Adobe_Stock_Batches", f"Batch_{batch_id}")
+def export_to_other_stock_local(results_list, batch_id):
+    adobe_dir = os.path.join("Other_Stock_Batches", f"Batch_{batch_id}")
     os.makedirs(adobe_dir, exist_ok=True)
-    csv_path = os.path.join(adobe_dir, "adobe_metadata.csv")
+    adobe_csv_path = os.path.join(adobe_dir, "adobe_stock_metadata.csv")
+    rf123_csv_path = os.path.join(adobe_dir, "123rf_metadata.csv")
 
-    with open(csv_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f, delimiter=",", quotechar='"', quoting=csv.QUOTE_ALL)
-        writer.writerow([
+    with open(adobe_csv_path, "w", newline="", encoding="utf-8") as f_adobe, \
+         open(rf123_csv_path, "w", newline="", encoding="utf-8") as f_123rf:
+        
+        writer_adobe = csv.writer(f_adobe, delimiter=",", quotechar='"', quoting=csv.QUOTE_ALL)
+        writer_123rf = csv.writer(f_123rf, delimiter=",", quotechar='"', quoting=csv.QUOTE_ALL)
+        
+        writer_adobe.writerow([
             "Filename",
             "Title",
             "Keywords",
             "Category",
             "Releases",
-            "File type",
-            "Created using generative AI tools",
-            "People and Property are fictional",
+        ])
+        
+        writer_123rf.writerow([
+            "oldfilename",
+            "123rf_filename",
+            "description",
+            "keywords",
+            "country"
         ])
 
         for item in results_list:
             remote_name = os.path.basename(item["path"])
             dest_path   = os.path.join(adobe_dir, remote_name)
             try:
-                shutil.copy2(item["path"], dest_path)
+                if not os.path.exists(dest_path):
+                    shutil.copy2(item["path"], dest_path)
             except Exception as e:
                 print(f"  Copy failed {remote_name}: {e}")
                 continue
 
-            title     = item["meta"].get("title", "Abstract Commercial Background")[:80]
+            title     = item["meta"].get("title", "Abstract Commercial Background")[:80].replace('\n', ' ').replace('\r', '')
+            desc      = item["meta"].get("description", "Premium abstract commercial background. (AI Generated)")
+            if "(AI Generated)" not in desc:
+                desc += " (AI Generated)"
+            desc = desc.replace(" (AI Generated) (AI Generated)", " (AI Generated)").replace('\n', ' ').replace('\r', '')[:1500]
+            
             keywords  = ",".join(item["meta"].get("keywords", []))
             style_key = item.get("style_key", "")
             adobe_cat = STYLE_ADOBE_CATEGORY.get(style_key, DEFAULT_ADOBE_CATEGORY)
 
-            writer.writerow([
+            writer_adobe.writerow([
                 remote_name,
                 title,
                 keywords,
                 adobe_cat,
                 "",              # Releases — blank for abstract AI
-                "Illustration",
-                "Yes",
-                "Yes",
+            ])
+            
+            writer_123rf.writerow([
+                remote_name,
+                "",              # 123rf_filename (optional)
+                desc,
+                keywords,
+                "US"
             ])
 
-    print(f"  Adobe package ready → {adobe_dir}")
+    print(f"  Other Stock package ready → {adobe_dir}")
     return adobe_dir
 
 
@@ -94,7 +115,7 @@ def batch_upload_to_dreamstime(results_list, retry_count=1):
         return True
 
     batch_id = get_next_batch_id()
-    export_to_adobe_stock_local(results_list, batch_id)
+    export_to_other_stock_local(results_list, batch_id)
 
     max_retries = retry_count + 1
     attempt     = 0
@@ -130,7 +151,7 @@ def batch_upload_to_dreamstime(results_list, retry_count=1):
             revenue_scores = []
             for item in results_list:
                 remote_name = os.path.basename(item["path"])
-                title       = item["meta"].get("title", "Abstract Background")[:80]
+                title       = item["meta"].get("title", "Abstract Background")[:80].replace('\n', ' ').replace('\r', '')
 
                 desc = item["meta"].get(
                     "description",
@@ -138,7 +159,7 @@ def batch_upload_to_dreamstime(results_list, retry_count=1):
                 )
                 if "(AI Generated)" not in desc:
                     desc += " (AI Generated)"
-                desc = desc.replace(" (AI Generated) (AI Generated)", " (AI Generated)")[:1500]
+                desc = desc.replace(" (AI Generated) (AI Generated)", " (AI Generated)").replace('\n', ' ').replace('\r', '')[:1500]
 
                 cat1  = item["meta"].get("category_id",   112)
                 cat2  = item["meta"].get("category_id_2", 210)
@@ -151,16 +172,14 @@ def batch_upload_to_dreamstime(results_list, retry_count=1):
                     desc,
                     cat1,
                     cat2,
-                    "",
+                    "212", # Category 3: Illustrations & Clipart -> AI generated
                     ",".join(item["meta"].get("keywords", [])),
-                    "0",  # Editorial
-                    "1",  # AI generated
-                    "1",  # No property release
-                    "0",  # No model release
-                    "0",  # Not subscription exclusive
-                    "1" if item.get("is_exclusive") else "0",
-                    "",
-                    "",
+                    "0",  # License Type: 0 = Commercial, 1 = Editorial
+                    "0",  # Model Release ID (0 or blank = none)
+                    "0",  # Property Release ID (0 or blank = none)
+                    "0",  # Price Level (0 = default)
+                    "1",  # Extended License (Toggles W-EL and P-EL on)
+                    "0",  # Exclusive
                 ])
 
             output.seek(0)

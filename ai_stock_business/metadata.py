@@ -96,18 +96,8 @@ def clean_keywords(raw_keywords, style_key=None):
         cleaned.add(seed.lower())
 
     cleaned_list = list(cleaned)
-    padding = [
-        "abstract", "background", "design", "modern", "professional",
-        "commercial", "artistic", "decorative", "pattern", "texture",
-        "creative", "studio", "render", "digital art", "illustration"
-    ]
-    for p in padding:
-        if len(cleaned_list) >= 48:
-            break
-        if p not in cleaned_list:
-            cleaned_list.append(p)
             
-    return cleaned_list[:50]
+    return cleaned_list[:40]
 
 def score_metadata_revenue_potential(title, keywords, category_id):
     score = 0
@@ -116,10 +106,10 @@ def score_metadata_revenue_potential(title, keywords, category_id):
     elif 45 <= tlen < 55:  score += 15
     else:                  score += 5
     kcount = len(keywords)
-    if kcount >= 47:   score += 25
-    elif kcount >= 40: score += 18
-    elif kcount >= 30: score += 10
-    else:              score += 3
+    if 15 <= kcount <= 35: score += 25
+    elif kcount > 35:      score += 15
+    elif kcount >= 10:     score += 10
+    else:                  score += 3
 
     longtail = sum(1 for k in keywords if len(k.split()) >= 2)
     score += min(20, longtail * 2)
@@ -128,12 +118,16 @@ def score_metadata_revenue_potential(title, keywords, category_id):
     score += 20 if category_id in high_value else 8
     return min(100, score)
 
-def generate_prompt_and_metadata(niche, style, palette, global_keywords, style_key=None):
+def generate_prompt_and_metadata(niche, style, palette, global_keywords, style_key=None, niche_type="evergreen", trend_directive="", target_buyer="Corporate Designer"):
     client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
     cat1_default, cat2_default = STYLE_CATEGORY_MAP.get(style_key, (112, 210))
     seeds          = STYLE_KEYWORD_SEEDS.get(style_key, [])
     category_str   = "\n".join([f"{k}: {v}" for k, v in VALID_CATEGORIES.items()])
+
+    seasonal_rule = ""
+    if niche_type.lower() == "seasonal":
+        seasonal_rule = "This is a SEASONAL niche. Include trending temporal keywords (e.g. quarterly, seasonal, holiday, trending)."
 
     prompt = f"""
 You are a commercial stock photography director.
@@ -143,21 +137,25 @@ IMAGE SPEC:
 - Niche        : {niche}
 - Visual style : {style}
 - Color palette: {palette}
+- Target Buyer : {target_buyer}
+- Context      : {seasonal_rule}
+- Market Trend : {trend_directive if trend_directive else "None specified. Stick strictly to the style."}
 
 DREAMSTIME CATEGORIES:
 {category_str}
 
 Return ONLY a valid JSON object:
 {{
-    "visual_prompt": "Describe EXACTLY what you would see in the finished image. 3-5 sentences of pure visual description.",
+    "visual_prompt": "Describe EXACTLY what you would see in the finished image. FOCUS ON COMMERCIAL UTILITY: Describe a commercial background layout with ample negative space for text/copy overlay. Avoid chaotic, overly busy, or purely surreal art. The image must clearly appeal to the Target Buyer.",
     "metadata": {{
-        "title": "Must be 55-79 characters total. Start with a strong VISUAL noun. NO commas.",
-        "description": "3 sentences ONLY describing visuals and aesthetic. Total: 150-300 characters.",
+        "title": "A highly specific 5-8 word product label (Title Case). NO commas, NO artistic names. Do not just describe the image, state what kind of background it is for.",
+        "description": "3 distinct descriptive sentences (Sentence case). MUST NOT reuse vocabulary from the title. Describe the aesthetics, colors, and layout clearly. TOTAL: 150-300 chars.",
         "keywords": [
-            "1. ONLY include words that describe something VISUALLY PRESENT in the image.",
-            "2. NO use-case words.",
+            "1. ONLY include real, correctly spelled dictionary words that describe something VISUALLY PRESENT in the image. NO made-up or hybrid words.",
+            "2. NO use-case words. NO spammy or irrelevant words.",
             "3. Include all these visual seeds: {seeds}",
-            "4. Provide EXACTLY 45 keywords as an array of strings."
+            "4. Provide EXACTLY 25 keywords as an array of strings.",
+            "5. CRITICAL SEO: The first 10 keywords MUST be the most descriptive, high-volume visual nouns in order of importance."
         ],
         "category_id": {cat1_default},
         "category_id_2": {cat2_default}
@@ -196,13 +194,8 @@ Return ONLY a valid JSON object:
     if len(title) > 79: title = title[:79].rsplit(" ", 1)[0]
     meta["title"] = title[:79]
 
-    # Prepend AI description correctly
     desc = meta.get("description", "Premium abstract commercial background.")
-    desc = desc.replace("(AI Generated)", "").strip()
-    if not desc.lower().startswith("ai-generated"):
-        # Make sure the first letter of original desc is lowercased if needed
-        desc = "AI-generated abstract " + desc[0].lower() + desc[1:]
-    meta["description"] = desc[:1500]
+    meta["description"] = desc.strip()[:1500]
 
     for field, fallback in [("category_id", cat1_default), ("category_id_2", cat2_default)]:
         v = meta.get(field)

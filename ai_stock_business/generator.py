@@ -1,4 +1,4 @@
-import replicate, os, requests, time, random
+import replicate, os, requests, time, random, piexif
 from PIL import Image
 from io import BytesIO
 
@@ -172,7 +172,7 @@ STYLE_PROFILES = {
         "dt_cats": [39, 112],
         "adobe_cat": 8,
         "sub_variants": [
-            "Shattered safety glass abstract crystalline fracture web",
+            "Clean frosted glass data concept with negative space",
             "Extreme macro of ice crystal formation dendritic branching structure",
             "Stack of clear glass geometric prisms refracting rainbow caustics",
             "Frosted glass sphere on mirror surface deep internal refraction",
@@ -212,7 +212,7 @@ def get_style_sub_variant(style_key: str) -> str:
     profile = STYLE_PROFILES.get(style_key, STYLE_PROFILES["tech_network"])
     return random.choice(profile["sub_variants"])
 
-def generate_and_save(visual_prompt, ratio_index=0, is_exclusive=False, style_key=None):
+def generate_and_save(visual_prompt, ratio_index=0, is_exclusive=False, style_key=None, meta_data=None):
     unique_seed   = random.randint(1, 999999999)
     # Heavily favor commercial ratios: 16:9, 4:3, 3:2
     aspect_ratios = ["16:9", "16:9", "4:3", "3:2", "3:2", "1:1", "9:16"]
@@ -230,8 +230,9 @@ def generate_and_save(visual_prompt, ratio_index=0, is_exclusive=False, style_ke
     replicate_prompt = (
         f"{sub_variant}, {visual_prompt}, "
         f"color palette: {profile['palette']}, "
-        f"shot on Hasselblad X2D, 100MP, commercial product photography, 8K cinematic studio render, "
-        f"technically flawless composition. "
+        f"shot on Hasselblad X2D, 100MP, commercial stock photography background, 8K cinematic studio render, "
+        f"clear conceptual subject, abundant negative space for copy, presentation background layout, "
+        f"dynamic lighting, dramatic depth of field, energetic and dynamic composition, technically flawless. "
         f"MANDATORY EXCLUSIONS: {NO_PEOPLE} {nature_clause} {NO_TEXT}"
     )
 
@@ -255,12 +256,12 @@ def generate_and_save(visual_prompt, ratio_index=0, is_exclusive=False, style_ke
                else str(output))
     time.sleep(4)
 
-    print(f"  Upscaling to ≥3 MP...")
+    print(f"  Upscaling to ≥4 MP...")
     upscale_output = replicate.run(
         "nightmareai/real-esrgan:42fed1c4974146d4d2414e2be2c5277c7fcf05fcc3a73abf41610695738c1d7b",
         input={
             "image":        img_url,
-            "scale":        2,
+            "scale":        4,
             "face_enhance": False,
         }
     )
@@ -281,8 +282,22 @@ def generate_and_save(visual_prompt, ratio_index=0, is_exclusive=False, style_ke
     filename = f"gen_{unique_seed}_{aspect_ratio.replace(':', 'x')}_upscaled.jpg"
     filepath = os.path.join("temp_images", filename)
     
-    # Save while stripping EXIF data via exif=b""
-    image_obj.save(filepath, format="JPEG", quality=95, exif=b"")
+    # Construct EXIF data using piexif
+    exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
+    if meta_data:
+        title = meta_data.get("title", "")
+        keywords = ";".join(meta_data.get("keywords", []))
+        desc = meta_data.get("description", "")
+        
+        exif_dict["0th"][piexif.ImageIFD.ImageDescription] = desc.encode("utf-8")
+        exif_dict["0th"][piexif.ImageIFD.XPTitle] = title.encode("utf-16le")
+        exif_dict["0th"][piexif.ImageIFD.XPKeywords] = keywords.encode("utf-16le")
+        exif_dict["0th"][piexif.ImageIFD.Software] = b"AI Generated"
+        
+    exif_bytes = piexif.dump(exif_dict)
+
+    # Save with generated EXIF
+    image_obj.save(filepath, format="JPEG", quality=95, exif=exif_bytes)
     print(f"  Saved    : {filepath} ({width}x{height})")
 
     return filepath
