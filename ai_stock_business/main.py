@@ -4,15 +4,12 @@ from groq import Groq
 from ddgs import DDGS
 from dotenv import load_dotenv
 import generator, metadata, uploader
-from generator import STYLE_PROFILE_KEYS, STYLE_PROFILES
 
 load_dotenv()
 
 LEDGER_FILE             = "concept_ledger.json"
 MAX_IMAGES_PER_CONCEPT  = 15
 EXPIRY_DAYS             = 90
-
-WARM_GOLD_FAMILY = {"luxury_gold", "finance_power", "warm_earth", "architecture_geo"}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LEDGER (With 90-day expiry & auto-migration)
@@ -50,7 +47,7 @@ def save_ledger(ledger):
     with open(LEDGER_FILE, "w") as f:
         json.dump(ledger, f, indent=4)
 
-def update_ledger(concept, style_key):
+def update_ledger(concept):
     ledger = load_ledger()
     current_time = time.time()
     
@@ -60,53 +57,7 @@ def update_ledger(concept, style_key):
     concept_data["last_used"] = current_time
     ledger["concepts"][concept] = concept_data
     
-    # Update Style
-    ledger["styles"][style_key] = ledger["styles"].get(style_key, 0) + 1
-    
     save_ledger(ledger)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# STYLE CYCLER
-# ─────────────────────────────────────────────────────────────────────────────
-class StyleCycler:
-    def __init__(self, target_count: int):
-        ledger       = load_ledger()
-        style_counts = ledger.get("styles", {})
-        sorted_styles = sorted(STYLE_PROFILE_KEYS, key=lambda k: style_counts.get(k, 0))
-        self._queue = self._build_round_robin_queue(sorted_styles, target_count)
-        self._last  = None
-        self._warm_gold_used = 0
-
-    def _build_round_robin_queue(self, sorted_styles, n):
-        queue  = []
-        styles = list(sorted_styles)
-        while len(queue) < n:
-            deck = list(styles)
-            random.shuffle(deck)
-            queue.extend(deck)
-        return queue[:n]
-
-    def next(self) -> str:
-        MAX_ATTEMPTS = len(STYLE_PROFILE_KEYS) * 2
-        for _ in range(MAX_ATTEMPTS):
-            if not self._queue:
-                deck = list(STYLE_PROFILE_KEYS)
-                random.shuffle(deck)
-                self._queue = deck
-            candidate = self._queue.pop(0)
-            if candidate == self._last:
-                self._queue.append(candidate)
-                continue
-            if candidate in WARM_GOLD_FAMILY and self._warm_gold_used >= 1:
-                self._queue.append(candidate)
-                continue
-            if candidate in WARM_GOLD_FAMILY:
-                self._warm_gold_used += 1
-            self._last = candidate
-            return candidate
-        fallback = random.choice([k for k in STYLE_PROFILE_KEYS if k != self._last])
-        self._last = fallback
-        return fallback
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TIMING & SEASONAL INTEL
@@ -165,7 +116,7 @@ def get_dynamic_market_context():
 # ─────────────────────────────────────────────────────────────────────────────
 # MASTER STRATEGY 
 # ─────────────────────────────────────────────────────────────────────────────
-def get_global_intelligence(live_market_context, target_count, style_queue):
+def get_global_intelligence(live_market_context, target_count):
     client  = Groq(api_key=os.getenv("GROQ_API_KEY"))
     month   = datetime.now().strftime("%B")
     ledger  = load_ledger()
@@ -185,13 +136,6 @@ def get_global_intelligence(live_market_context, target_count, style_queue):
         except:
             pass
 
-    style_assignments = []
-    for i, sk in enumerate(style_queue):
-        label   = STYLE_PROFILES[sk]["label"]
-        palette = STYLE_PROFILES[sk]["palette"].split("—")[0].strip()
-        style_assignments.append(f'  Image {i+1}: style="{label}", palette="{palette}"')
-    style_assignment_str = "\n".join(style_assignments)
-
     prompt = f"""
 You are a commercial stock photography portfolio strategist.
 
@@ -200,13 +144,11 @@ HISTORICAL:  {historical}
 SEASONAL FORECAST (6-WEEKS OUT): {seasonal}
 SATURATED (DO NOT USE): {saturated_text}
 
-The next batch will contain {target_count} images with these PRE-ASSIGNED visual styles:
-{style_assignment_str}
+Your task is to generate EXACTLY {target_count} HIGHLY DIVERSE, trending commercial photography niches based on the LIVE MARKET context.
+Ensure EXTREME DIVERSITY across the {target_count} niches so they do not look similar. Mix different buyer markets.
 
 For EACH image slot, generate ONE niche concept that:
-  - PERFECTLY MATCHES the assigned style and palette.
   - Is a SPECIFIC COMMERCIAL USE-CASE (e.g., 'Corporate sustainability presentation background', 'Healthcare data encryption layout').
-  - Is NOT purely artistic, surreal, or chaotic "art for art's sake".
   - Has a clear TARGET BUYER (e.g., 'Fintech Marketer', 'Eco-friendly Brand Designer').
   - Mixes evergreen business themes with upcoming seasonal trends.
   - Is NOT saturated.
@@ -217,10 +159,12 @@ Return ONLY a valid JSON object:
         {{
             "name": "specific commercial use-case (4-8 words)",
             "target_buyer": "profession of target buyer",
-            "visual_directive": "Specific visual styling instruction based on LIVE MARKET trends (e.g., 'Use soft pastel gradients trending for spring', 'Incorporate tech-noir neon as currently demanded')",
+            "aesthetic_style": "A dynamically chosen visual style based on LIVE MARKET trends (e.g., 'Ambient Realism', 'Retro Flash', 'Clean Minimalist', 'High Concept Chaos')",
+            "color_palette": "A dynamically chosen color palette that fits the trend and style",
+            "aspect_ratio": "Choose EXACTLY ONE absolute best aspect ratio for this niche from: ['16:9', '9:16', '4:3', '3:2', '1:1']. Focus heavily on vertical (9:16) and horizontal (16:9).",
+            "adobe_category": "An integer between 1 and 22 representing the best Adobe Stock category (e.g., 4=Business, 19=Technology, 10=Industry, 8=Graphic Resources, 16=Science, 2=Architecture)",
             "viability_score": 85,
-            "type": "evergreen or seasonal",
-            "assigned_style_index": 0
+            "type": "evergreen or seasonal"
         }}
     ],
     "global_keywords": ["20", "cross-market", "high-volume", "stock", "keywords"]
@@ -229,8 +173,9 @@ Return ONLY a valid JSON object:
 RULES:
 1. Provide exactly {target_count} niches, one per image slot, in order.
 2. Distribute across different buyer markets.
+3. Guarantee extreme visual and topical diversity between the niches.
 """
-    print("  Consulting LLM for style-matched niche strategy...")
+    print("  Consulting LLM for dynamic market strategy...")
     try:
         completion = client.chat.completions.create(
             model="llama-3.1-8b-instant",
@@ -241,8 +186,8 @@ RULES:
     except Exception as e:
         print(f"  Strategy LLM failed: {e}. Using safe defaults.")
         return {
-            "niches": [{"name": "cybersecurity network background", "target_buyer": "Tech Presentation Designer", "visual_directive": "Focus on glowing nodes and deep blue tech styling", "viability_score": 90, "exclusive_percent": 50, "type": "evergreen", "assigned_style_index": i} for i in range(target_count)],
-            "global_keywords": ["abstract", "business", "modern", "professional", "technology", "creative"],
+            "niches": [{"name": "cybersecurity network background", "target_buyer": "Tech Presentation Designer", "aesthetic_style": "Realistic Commercial", "color_palette": "neutral tones", "aspect_ratio": "16:9", "adobe_category": 19, "viability_score": 90, "type": "evergreen"} for i in range(target_count)],
+            "global_keywords": ["realistic", "business", "modern", "professional", "technology", "creative"],
         }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -259,18 +204,16 @@ def main():
     timing = get_optimal_upload_timing()
     print(f"  Upload timing: {timing['day_info']['name']} — {timing['recommendation']}\n")
 
-    cycler      = StyleCycler(target_count)
-    style_queue = [cycler.next() for _ in range(target_count)]
-
     live_context    = get_dynamic_market_context()
-    intel           = get_global_intelligence(live_context, target_count, style_queue)
+    intel           = get_global_intelligence(live_context, target_count)
     niches          = intel.get("niches", [])
-    global_keywords = intel.get("global_keywords", ["business", "abstract", "modern"])
+    global_keywords = intel.get("global_keywords", ["business", "realistic", "modern"])
 
     while len(niches) < target_count:
         niches.append({
-            "name": "abstract commercial background", "viability_score": 75,
-            "type": "evergreen", "assigned_style_index": len(niches),
+            "name": "realistic commercial background", "viability_score": 75,
+            "type": "evergreen", "aesthetic_style": "Realistic Commercial", 
+            "color_palette": "neutral", "aspect_ratio": "16:9", "adobe_category": 19
         })
 
     batch_results  = []
@@ -278,11 +221,13 @@ def main():
 
     for i in range(target_count):
         niche_data  = niches[i] if i < len(niches) else niches[-1]
-        style_key   = style_queue[i]
-        base_niche  = niche_data.get("name", "abstract commercial background")
+        base_niche  = niche_data.get("name", "realistic commercial background")
         niche_type   = niche_data.get("type", "evergreen")
         target_buyer = niche_data.get("target_buyer", "Corporate Designer")
-        excl_thresh  = niche_data.get("exclusive_percent", 40) / 100.0
+        aesthetic    = niche_data.get("aesthetic_style", "Realistic Commercial")
+        palette      = niche_data.get("color_palette", "neutral")
+        aspect_ratio = niche_data.get("aspect_ratio", "16:9")
+        adobe_cat    = niche_data.get("adobe_category", 19)
 
         print(f"\n  ── IMAGE {i+1}/{target_count} ───────────────────────────────")
         print(f"  Niche    : [{niche_type.upper()}] {base_niche} (For: {target_buyer})")
@@ -290,30 +235,29 @@ def main():
         max_retries = 2
         for attempt in range(max_retries):
             try:
-                trend_directive = niche_data.get("visual_directive", "")
-                
                 visual_prompt, meta = metadata.generate_prompt_and_metadata(
-                    niche=base_niche, style=STYLE_PROFILES[style_key]["label"],
-                    palette=STYLE_PROFILES[style_key]["palette"].split("—")[0].strip(),
-                    global_keywords=global_keywords, style_key=style_key,
+                    niche=base_niche, aesthetic_style=aesthetic,
+                    palette=palette,
+                    global_keywords=global_keywords,
                     niche_type=niche_type,
-                    trend_directive=trend_directive,
-                    target_buyer=target_buyer
+                    target_buyer=target_buyer,
+                    aspect_ratio=aspect_ratio
                 )
 
                 img_path = generator.generate_and_save(
-                    visual_prompt=visual_prompt, ratio_index=i,
-                    is_exclusive=False, style_key=style_key,
+                    visual_prompt=visual_prompt, aspect_ratio=aspect_ratio,
+                    aesthetic_style=aesthetic, palette=palette,
+                    is_exclusive=False,
                     meta_data=meta
                 )
 
                 batch_results.append({
                     "path": img_path, "meta": meta,
                     "is_exclusive": False,
-                    "niche": base_niche, "style_key": style_key, "timestamp": time.time(),
+                    "niche": base_niche, "adobe_category": adobe_cat, "timestamp": time.time(),
                 })
 
-                update_ledger(base_niche, style_key)
+                update_ledger(base_niche)
                 time.sleep(5)
                 break
             except Exception as e:

@@ -30,41 +30,7 @@ VALID_CATEGORIES = {
     199: "Web Design Graphics -> Web Backgrounds & Textures",
 }
 
-STYLE_CATEGORY_MAP = {
-    "tech_network":         (210, 110),
-    "luxury_gold":          (45,  87),
-    "finance_power":        (80,  52),
-    "vibrant_gradient":     (164, 199),
-    "healthcare_science":   (92,  209),
-    "architecture_geo":     (89,  141),
-    "energy_explosive":     (47,  97),
-    "dark_neon":            (45,  112),
-    "organic_texture":      (141, 164),
-    "minimal_geometric":    (112, 54),
-    "sustainability_green": (99,  97),
-    "chrome_mechanical":    (100, 113),
-    "royal_purple":         (45,  52),
-    "warm_earth":           (141, 48),
-    "ice_glass":            (39,  112),
-}
 
-STYLE_KEYWORD_SEEDS = {
-    "tech_network":         ["glowing nodes", "fiber optic", "circuit board", "data stream", "blue glow"],
-    "luxury_gold":          ["polished gold", "metallic sheen", "black marble", "gold texture", "reflective"],
-    "finance_power":        ["brushed steel", "ascending bars", "navy blue", "chrome surface", "corporate form"],
-    "vibrant_gradient":     ["fluid swirl", "color gradient", "vivid colors", "smooth transition", "iridescent"],
-    "healthcare_science":   ["molecular structure", "crystalline lattice", "aqua teal", "frosted glass", "clean white"],
-    "architecture_geo":     ["concrete texture", "angular shadow", "brutalist form", "raw concrete", "rust orange"],
-    "energy_explosive":     ["radial burst", "plasma arc", "fiery orange", "motion trail", "electric discharge"],
-    "dark_neon":            ["neon magenta", "matte black", "grid lines", "edge glow", "neon accent"],
-    "organic_texture":      ["mineral banding", "terracotta", "stone texture", "slate gray", "oxidized copper"],
-    "sustainability_green": ["clean energy", "lime green", "glass refraction", "forest green", "circular topology"],
-    "chrome_mechanical":    ["mirror chrome", "gear teeth", "brushed steel", "precision machined", "industrial"],
-    "royal_purple":         ["amethyst purple", "rose gold accent", "velvet texture", "violet hue", "iridescent foil"],
-    "warm_earth":           ["terracotta layers", "blush pink", "burnt sienna", "ceramic glaze", "trowel marks"],
-    "ice_glass":            ["shattered glass", "ice crystal", "refraction", "frosted sphere", "cold white"],
-    "minimal_geometric":    ["negative space", "soft shadow", "Bauhaus", "geometric form", "muted palette"],
-}
 
 BANNED_KEYWORDS = {
     "boardroom", "meeting", "presentation", "office", "living", "vacation",
@@ -75,8 +41,7 @@ BANNED_KEYWORDS = {
     "team", "staff", "employee", "manager", "director", "investor",
 }
 
-def clean_keywords(raw_keywords, style_key=None):
-    seeds   = STYLE_KEYWORD_SEEDS.get(style_key, [])
+def clean_keywords(raw_keywords):
     cleaned = set()
     for kw in raw_keywords:
         if not isinstance(kw, str):
@@ -91,9 +56,6 @@ def clean_keywords(raw_keywords, style_key=None):
             if all(w.isdigit() for w in words):
                 continue
             cleaned.add(k)
-
-    for seed in seeds:
-        cleaned.add(seed.lower())
 
     cleaned_list = list(cleaned)
             
@@ -118,11 +80,9 @@ def score_metadata_revenue_potential(title, keywords, category_id):
     score += 20 if category_id in high_value else 8
     return min(100, score)
 
-def generate_prompt_and_metadata(niche, style, palette, global_keywords, style_key=None, niche_type="evergreen", trend_directive="", target_buyer="Corporate Designer"):
+def generate_prompt_and_metadata(niche, aesthetic_style, palette, global_keywords, niche_type="evergreen", target_buyer="Corporate Designer", aspect_ratio="16:9"):
     client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-    cat1_default, cat2_default = STYLE_CATEGORY_MAP.get(style_key, (112, 210))
-    seeds          = STYLE_KEYWORD_SEEDS.get(style_key, [])
     category_str   = "\n".join([f"{k}: {v}" for k, v in VALID_CATEGORIES.items()])
 
     seasonal_rule = ""
@@ -135,32 +95,35 @@ Your task: write the visual_prompt and metadata for one image.
 
 IMAGE SPEC:
 - Niche        : {niche}
-- Visual style : {style}
+- Aesthetic    : {aesthetic_style}
 - Color palette: {palette}
+- Aspect Ratio : {aspect_ratio}
 - Target Buyer : {target_buyer}
 - Context      : {seasonal_rule}
-- Market Trend : {trend_directive if trend_directive else "None specified. Stick strictly to the style."}
 
 DREAMSTIME CATEGORIES:
 {category_str}
 
 Return ONLY a valid JSON object:
 {{
-    "visual_prompt": "Describe EXACTLY what you would see in the finished image. FOCUS ON COMMERCIAL UTILITY: Describe a commercial background layout with ample negative space for text/copy overlay. Avoid chaotic, overly busy, or purely surreal art. The image must clearly appeal to the Target Buyer.",
+    "visual_prompt": "Describe EXACTLY what you would see in the finished image. Build the prompt dynamically to perfectly embody the requested Aesthetic Style. Make it highly commercial and tailored to the Target Buyer.",
     "metadata": {{
         "title": "A highly specific 5-8 word product label (Title Case). NO commas, NO artistic names. Do not just describe the image, state what kind of background it is for.",
         "description": "3 distinct descriptive sentences (Sentence case). MUST NOT reuse vocabulary from the title. Describe the aesthetics, colors, and layout clearly. TOTAL: 150-300 chars.",
         "keywords": [
             "1. ONLY include real, correctly spelled dictionary words that describe something VISUALLY PRESENT in the image. NO made-up or hybrid words.",
             "2. NO use-case words. NO spammy or irrelevant words.",
-            "3. Include all these visual seeds: {seeds}",
+            "3. Include global keywords: {', '.join(global_keywords)}",
             "4. Provide EXACTLY 25 keywords as an array of strings.",
             "5. CRITICAL SEO: The first 10 keywords MUST be the most descriptive, high-volume visual nouns in order of importance."
         ],
-        "category_id": {cat1_default},
-        "category_id_2": {cat2_default}
+        "category_id": "Integer ID of the absolute best primary category from the DREAMSTIME list",
+        "category_id_2": "Integer ID of the second best category from the DREAMSTIME list"
     }}
 }}
+
+STRICT IP AND LEGAL FENCE:
+DO NOT include any brand names, trademarked products, real-world locations, recognizable buildings, or names of real artists in the visual_prompt, title, description, or keywords. Stick purely to generic, abstract, or non-trademarked physical descriptions.
 """
     try:
         completion = client.chat.completions.create(
@@ -172,13 +135,13 @@ Return ONLY a valid JSON object:
     except Exception as e:
         print(f"  Metadata LLM failed: {e}. Using safe defaults.")
         data = {
-            "visual_prompt": f"Abstract {style} composition featuring {palette} tones.",
+            "visual_prompt": f"Hyper-realistic {aesthetic_style} commercial photography featuring {palette} tones.",
             "metadata": {
-                "title": f"Abstract {niche.title()} {style} Commercial Background",
-                "description": f"Abstract geometric forms rendered in {palette} tones. Suitable for digital marketing.",
-                "keywords": seeds + ["abstract", "background", "geometric", "render"],
-                "category_id": cat1_default,
-                "category_id_2": cat2_default,
+                "title": f"Realistic {niche.title()} Commercial Background",
+                "description": f"Hyper-realistic tangible objects rendered in {palette} tones. Suitable for digital marketing.",
+                "keywords": ["realistic", "background", "tangible", "commercial"] + global_keywords,
+                "category_id": 112,
+                "category_id_2": 210,
             }
         }
 
@@ -188,16 +151,16 @@ Return ONLY a valid JSON object:
     if isinstance(raw_kws, str):
         raw_kws = raw_kws.split(",")
     raw_kws = [k for k in raw_kws if isinstance(k, str) and len(k) < 60 and "RULE" not in k]
-    meta["keywords"] = clean_keywords(raw_kws, style_key=style_key)
+    meta["keywords"] = clean_keywords(raw_kws)
 
-    title = meta.get("title", f"Abstract {style} Commercial Background Design").replace(",", "").strip()
+    title = meta.get("title", f"Realistic Commercial Background Design").replace(",", "").strip()
     if len(title) > 79: title = title[:79].rsplit(" ", 1)[0]
     meta["title"] = title[:79]
 
-    desc = meta.get("description", "Premium abstract commercial background.")
+    desc = meta.get("description", "Premium realistic commercial background.")
     meta["description"] = desc.strip()[:1500]
 
-    for field, fallback in [("category_id", cat1_default), ("category_id_2", cat2_default)]:
+    for field, fallback in [("category_id", 112), ("category_id_2", 210)]:
         v = meta.get(field)
         if isinstance(v, list): v = v[0] if v else fallback
         try: v = int(v)
@@ -205,4 +168,4 @@ Return ONLY a valid JSON object:
         meta[field] = v if v in VALID_CATEGORIES else fallback
 
     meta["revenue_score"] = score_metadata_revenue_potential(meta["title"], meta["keywords"], meta["category_id"])
-    return data.get("visual_prompt", "Abstract commercial background."), meta
+    return data.get("visual_prompt", "Hyper-realistic commercial background."), meta

@@ -5,23 +5,7 @@ import ftplib, csv, os, io, time, shutil
 # Adobe: 3=Architecture, 4=Business, 8=Graphic Resources, 10=Industry,
 #        16=Science, 19=Technology, 22=Buildings
 # ─────────────────────────────────────────────────────────────────────────────
-STYLE_ADOBE_CATEGORY = {
-    "tech_network":         19,   # Technology
-    "luxury_gold":           8,   # Graphic Resources
-    "finance_power":         3,   # Business (was 4 Drinks)
-    "vibrant_gradient":      8,   # Graphic Resources
-    "healthcare_science":   16,   # Science
-    "architecture_geo":      2,   # Buildings and Architecture (was 3 Business)
-    "energy_explosive":     10,   # Industry
-    "dark_neon":             8,   # Graphic Resources
-    "organic_texture":       8,   # Graphic Resources
-    "minimal_geometric":     8,   # Graphic Resources
-    "sustainability_green": 19,   # Technology
-    "chrome_mechanical":    10,   # Industry
-    "royal_purple":          8,   # Graphic Resources
-    "warm_earth":            8,   # Graphic Resources
-    "ice_glass":             8,   # Graphic Resources
-}
+
 
 DEFAULT_ADOBE_CATEGORY = 19
 
@@ -80,15 +64,14 @@ def export_to_other_stock_local(results_list, batch_id):
                 print(f"  Copy failed {remote_name}: {e}")
                 continue
 
-            title     = item["meta"].get("title", "Abstract Commercial Background")[:80].replace('\n', ' ').replace('\r', '')
-            desc      = item["meta"].get("description", "Premium abstract commercial background. (AI Generated)")
+            title     = item["meta"].get("title", "Realistic Commercial Background")[:80].replace('\n', ' ').replace('\r', '')
+            desc      = item["meta"].get("description", "Premium realistic commercial background. (AI Generated)")
             if "(AI Generated)" not in desc:
                 desc += " (AI Generated)"
             desc = desc.replace(" (AI Generated) (AI Generated)", " (AI Generated)").replace('\n', ' ').replace('\r', '')[:1500]
             
             keywords  = ",".join(item["meta"].get("keywords", []))
-            style_key = item.get("style_key", "")
-            adobe_cat = STYLE_ADOBE_CATEGORY.get(style_key, DEFAULT_ADOBE_CATEGORY)
+            adobe_cat = item.get("adobe_category", DEFAULT_ADOBE_CATEGORY)
 
             writer_adobe.writerow([
                 remote_name,
@@ -151,11 +134,11 @@ def batch_upload_to_dreamstime(results_list, retry_count=1):
             revenue_scores = []
             for item in results_list:
                 remote_name = os.path.basename(item["path"])
-                title       = item["meta"].get("title", "Abstract Background")[:80].replace('\n', ' ').replace('\r', '')
+                title       = item["meta"].get("title", "Realistic Background")[:80].replace('\n', ' ').replace('\r', '')
 
                 desc = item["meta"].get(
                     "description",
-                    "Premium abstract commercial background. (AI Generated)"
+                    "Premium realistic commercial background. (AI Generated)"
                 )
                 if "(AI Generated)" not in desc:
                     desc += " (AI Generated)"
