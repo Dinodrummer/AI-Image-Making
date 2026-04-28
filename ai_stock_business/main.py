@@ -148,7 +148,8 @@ Your task is to generate EXACTLY {target_count} HIGHLY DIVERSE, trending commerc
 Ensure EXTREME DIVERSITY across the {target_count} niches so they do not look similar. Mix different buyer markets.
 
 For EACH image slot, generate ONE niche concept that:
-  - Is a SPECIFIC COMMERCIAL USE-CASE (e.g., 'Corporate sustainability presentation background', 'Healthcare data encryption layout').
+  - Is a SPECIFIC COMMERCIAL USE-CASE (e.g., 'Corporate presentation background', 'Abstract 3D data security concept', 'Isolated minimalist eco-friendly object'). Allows backgrounds, conceptual renders, and isolated objects.
+  - MUST HAVE EXTREMELY HIGH COMMERCIAL UTILITY (e.g. abundant negative space for copy). DO NOT generate 'pure art', 'chaos', or generic scenes that lack a business application.
   - Has a clear TARGET BUYER (e.g., 'Fintech Marketer', 'Eco-friendly Brand Designer').
   - Mixes evergreen business themes with upcoming seasonal trends.
   - Is NOT saturated.
@@ -162,7 +163,7 @@ Return ONLY a valid JSON object:
             "aesthetic_style": "A dynamically chosen visual style based on LIVE MARKET trends (e.g., 'Ambient Realism', 'Retro Flash', 'Clean Minimalist', 'High Concept Chaos')",
             "color_palette": "A dynamically chosen color palette that fits the trend and style",
             "aspect_ratio": "Choose EXACTLY ONE absolute best aspect ratio for this niche from: ['16:9', '9:16', '4:3', '3:2', '1:1']. Focus heavily on vertical (9:16) and horizontal (16:9).",
-            "adobe_category": "An integer between 1 and 22 representing the best Adobe Stock category (e.g., 4=Business, 19=Technology, 10=Industry, 8=Graphic Resources, 16=Science, 2=Architecture)",
+            "adobe_category": 4,
             "viability_score": 85,
             "type": "evergreen or seasonal"
         }}
@@ -174,6 +175,7 @@ RULES:
 1. Provide exactly {target_count} niches, one per image slot, in order.
 2. Distribute across different buyer markets.
 3. Guarantee extreme visual and topical diversity between the niches.
+4. adobe_category MUST BE PURELY AN INTEGER between 1 and 22, no text.
 """
     print("  Consulting LLM for dynamic market strategy...")
     try:
@@ -227,7 +229,13 @@ def main():
         aesthetic    = niche_data.get("aesthetic_style", "Realistic Commercial")
         palette      = niche_data.get("color_palette", "neutral")
         aspect_ratio = niche_data.get("aspect_ratio", "16:9")
-        adobe_cat    = niche_data.get("adobe_category", 19)
+        
+        raw_adobe = str(niche_data.get("adobe_category", 19))
+        try:
+            import re
+            adobe_cat = int(re.search(r'\d+', raw_adobe).group())
+        except (ValueError, AttributeError):
+            adobe_cat = 19
 
         print(f"\n  ── IMAGE {i+1}/{target_count} ───────────────────────────────")
         print(f"  Niche    : [{niche_type.upper()}] {base_niche} (For: {target_buyer})")

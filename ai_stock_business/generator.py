@@ -17,7 +17,7 @@ def generate_and_save(visual_prompt, aspect_ratio="16:9", aesthetic_style="Reali
         aspect_ratio = "16:9"
 
     # Base quality guardrails that we ALWAYS want, regardless of dynamic style
-    quality_guardrails = "Hyper-realistic physical objects and surfaces ONLY. NO abstract art, NO digital noise, NO chaotic geometry. High quality commercial stock photography background, clear conceptual subject, abundant negative space for copy, presentation background layout, technically flawless."
+    quality_guardrails = "High quality commercial stock photography, technically flawless, no digital noise, no chaotic visual artifacts. Ensure layout has abundant negative space for copy if it is a background."
 
     replicate_prompt = (
         f"{visual_prompt}, "

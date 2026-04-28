@@ -32,15 +32,6 @@ VALID_CATEGORIES = {
 
 
 
-BANNED_KEYWORDS = {
-    "boardroom", "meeting", "presentation", "office", "living", "vacation",
-    "holiday", "travel", "lifestyle", "workspace", "workplace", "conference",
-    "seminar", "webinar", "workshop", "training", "consulting", "strategy",
-    "solution", "service", "platform", "product", "brand", "marketing",
-    "advertising", "campaign", "startup", "entrepreneur", "ceo", "executive",
-    "team", "staff", "employee", "manager", "director", "investor",
-}
-
 def clean_keywords(raw_keywords):
     cleaned = set()
     for kw in raw_keywords:
@@ -50,8 +41,6 @@ def clean_keywords(raw_keywords):
             k     = sub.strip().lower()
             words = k.split()
             if not words or len(words) > 3:
-                continue
-            if any(w in BANNED_KEYWORDS for w in words):
                 continue
             if all(w.isdigit() for w in words):
                 continue
@@ -108,17 +97,17 @@ Return ONLY a valid JSON object:
 {{
     "visual_prompt": "Describe EXACTLY what you would see in the finished image. Build the prompt dynamically to perfectly embody the requested Aesthetic Style. Make it highly commercial and tailored to the Target Buyer.",
     "metadata": {{
-        "title": "A highly specific 5-8 word product label (Title Case). NO commas, NO artistic names. Do not just describe the image, state what kind of background it is for.",
-        "description": "3 distinct descriptive sentences (Sentence case). MUST NOT reuse vocabulary from the title. Describe the aesthetics, colors, and layout clearly. TOTAL: 150-300 chars.",
+        "title": "A natural, descriptive sentence fragment in Sentence case. Describe exactly what is in the image. DO NOT write it like a product label or string of keywords. DO NOT use Title Case. Make ONLY the first letter of the first word capitalized. Max 8 words.",
+        "description": "2-3 distinct descriptive sentences (Sentence case). MUST NOT simply repeat the title. Describe the aesthetics, colors, and layout clearly. TOTAL: 150-300 chars.",
         "keywords": [
             "1. ONLY include real, correctly spelled dictionary words that describe something VISUALLY PRESENT in the image. NO made-up or hybrid words.",
-            "2. NO use-case words. NO spammy or irrelevant words.",
+            "2. Do not use words implying people (like 'team', 'staff') since the image is unpopulated. However, phrases like 'empty office' or 'presentation background' are highly encouraged if applicable.",
             "3. Include global keywords: {', '.join(global_keywords)}",
             "4. Provide EXACTLY 25 keywords as an array of strings.",
             "5. CRITICAL SEO: The first 10 keywords MUST be the most descriptive, high-volume visual nouns in order of importance."
         ],
-        "category_id": "Integer ID of the absolute best primary category from the DREAMSTIME list",
-        "category_id_2": "Integer ID of the second best category from the DREAMSTIME list"
+        "category_id": 112,
+        "category_id_2": 210
     }}
 }}
 
@@ -163,8 +152,12 @@ DO NOT include any brand names, trademarked products, real-world locations, reco
     for field, fallback in [("category_id", 112), ("category_id_2", 210)]:
         v = meta.get(field)
         if isinstance(v, list): v = v[0] if v else fallback
-        try: v = int(v)
-        except: v = fallback
+        try: 
+            v = int(v)
+        except (ValueError, TypeError):
+            import re
+            match = re.search(r'\d+', str(v))
+            v = int(match.group()) if match else fallback
         meta[field] = v if v in VALID_CATEGORIES else fallback
 
     meta["revenue_score"] = score_metadata_revenue_potential(meta["title"], meta["keywords"], meta["category_id"])

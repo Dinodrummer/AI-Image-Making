@@ -65,10 +65,10 @@ def export_to_other_stock_local(results_list, batch_id):
                 continue
 
             title     = item["meta"].get("title", "Realistic Commercial Background")[:80].replace('\n', ' ').replace('\r', '')
-            desc      = item["meta"].get("description", "Premium realistic commercial background. (AI Generated)")
-            if "(AI Generated)" not in desc:
-                desc += " (AI Generated)"
-            desc = desc.replace(" (AI Generated) (AI Generated)", " (AI Generated)").replace('\n', ' ').replace('\r', '')[:1500]
+            desc      = item["meta"].get("description", "Premium realistic commercial background. AI Generated")
+            if "AI Generated" not in desc:
+                desc += " AI Generated"
+            desc = desc.replace(" AI Generated AI Generated", " AI Generated").replace('\n', ' ').replace('\r', '')[:1500]
             
             keywords  = ",".join(item["meta"].get("keywords", []))
             adobe_cat = item.get("adobe_category", DEFAULT_ADOBE_CATEGORY)
@@ -138,11 +138,11 @@ def batch_upload_to_dreamstime(results_list, retry_count=1):
 
                 desc = item["meta"].get(
                     "description",
-                    "Premium realistic commercial background. (AI Generated)"
+                    "Premium realistic commercial background. AI Generated"
                 )
-                if "(AI Generated)" not in desc:
-                    desc += " (AI Generated)"
-                desc = desc.replace(" (AI Generated) (AI Generated)", " (AI Generated)").replace('\n', ' ').replace('\r', '')[:1500]
+                if "AI Generated" not in desc:
+                    desc += " AI Generated"
+                desc = desc.replace(" AI Generated AI Generated", " AI Generated").replace('\n', ' ').replace('\r', '')[:1500]
 
                 cat1  = item["meta"].get("category_id",   112)
                 cat2  = item["meta"].get("category_id_2", 210)
@@ -158,10 +158,10 @@ def batch_upload_to_dreamstime(results_list, retry_count=1):
                     "212", # Category 3: Illustrations & Clipart -> AI generated
                     ",".join(item["meta"].get("keywords", [])),
                     "0",  # License Type: 0 = Commercial, 1 = Editorial
-                    "0",  # Model Release ID (0 or blank = none)
-                    "0",  # Property Release ID (0 or blank = none)
+                    "1",  # Web Usage
+                    "1",  # Print Usage
                     "0",  # Price Level (0 = default)
-                    "1",  # Extended License (Toggles W-EL and P-EL on)
+                    "1",  # Extended License 
                     "0",  # Exclusive
                 ])
 
